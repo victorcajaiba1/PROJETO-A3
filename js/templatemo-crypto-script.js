@@ -420,6 +420,19 @@ https://templatemo.com/tm-609-crypto-vault
     }
 
     /* ========================================
+       Role-Based Sidebar
+    ======================================== */
+    function initRoleBasedSidebar() {
+        var sessao = JSON.parse(localStorage.getItem('tw_sessao') || 'null');
+        var isAdmin = sessao && sessao.perfil === 'admin';
+        if (!isAdmin) {
+            document.querySelectorAll('a[href="dashboard.html"], a[href="admin.html"]').forEach(function(el) {
+                el.style.display = 'none';
+            });
+        }
+    }
+
+    /* ========================================
        Initialize All
     ======================================== */
     function init() {
@@ -436,6 +449,7 @@ https://templatemo.com/tm-609-crypto-vault
         initAuthTabs();
         initFormSubmissions();
         initPlaceholderButtons();
+        initRoleBasedSidebar();
     }
 
     // Run on DOM ready

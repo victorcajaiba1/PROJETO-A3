@@ -4,8 +4,6 @@
     // ========================================
     // Dados dos Produtos
     // ========================================
-    var DADOS_VERSAO = '1.2';
-
     var PRODUTOS_PADRAO = [
         {
             id: 1,
@@ -16,7 +14,7 @@
             tamanhos: ['P', 'M', 'G', 'GG'],
             cor: 'Preto',
             hex_color: '#1a1a1a',
-            imagem: 'https://images.unsplash.com/photo-1556906781-9a412961a28c?w=400&q=80',
+            imagem: '',
             estoque: 15,
             esporte: 'corrida'
         },
@@ -29,7 +27,7 @@
             tamanhos: ['P', 'M', 'G', 'GG'],
             cor: 'Cinza',
             hex_color: '#808080',
-            imagem: 'https://images.unsplash.com/photo-1473966968600-fa801b869a1a?w=400&q=80',
+            imagem: '',
             estoque: 22,
             esporte: 'academia'
         },
@@ -42,7 +40,7 @@
             tamanhos: ['P', 'M', 'G', 'GG', 'XG'],
             cor: 'Branco',
             hex_color: '#f5f5f5',
-            imagem: 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=400&q=80',
+            imagem: '',
             estoque: 40,
             esporte: 'corrida'
         },
@@ -55,7 +53,7 @@
             tamanhos: ['M', 'G', 'GG'],
             cor: 'Preto',
             hex_color: '#1a1a1a',
-            imagem: 'https://images.unsplash.com/photo-1509631179647-0177331693ae?w=400&q=80',
+            imagem: '',
             estoque: 18,
             esporte: 'corrida'
         },
@@ -68,7 +66,7 @@
             tamanhos: ['P', 'M', 'G', 'GG'],
             cor: 'Azul Marinho',
             hex_color: '#1b2a4a',
-            imagem: 'https://images.unsplash.com/photo-1571902943202-507ec2618e8f?w=400&q=80',
+            imagem: '',
             estoque: 30,
             esporte: 'academia'
         },
@@ -81,7 +79,7 @@
             tamanhos: ['P', 'M', 'G'],
             cor: 'Cinza',
             hex_color: '#808080',
-            imagem: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=400&q=80',
+            imagem: '',
             estoque: 25,
             esporte: 'academia'
         },
@@ -94,7 +92,7 @@
             tamanhos: ['P', 'M', 'G', 'GG'],
             cor: 'Verde Militar',
             hex_color: '#4b5320',
-            imagem: 'https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=400&q=80',
+            imagem: '',
             estoque: 12,
             esporte: 'corrida'
         },
@@ -107,7 +105,7 @@
             tamanhos: ['P', 'M', 'G'],
             cor: 'Preto',
             hex_color: '#1a1a1a',
-            imagem: 'https://images.unsplash.com/photo-1506629082955-511b1aa562c8?w=400&q=80',
+            imagem: '',
             estoque: 35,
             esporte: 'academia'
         }
@@ -117,12 +115,9 @@
     // Gerenciamento de Produtos (localStorage)
     // ========================================
     function getProdutos() {
-        var versaoSalva = localStorage.getItem('tw_dados_versao');
         var saved = localStorage.getItem('tw_produtos');
-        if (saved && versaoSalva === DADOS_VERSAO) return JSON.parse(saved);
-        // Versão desatualizada ou primeiro acesso: reinicia com os padrões
+        if (saved) return JSON.parse(saved);
         localStorage.setItem('tw_produtos', JSON.stringify(PRODUTOS_PADRAO));
-        localStorage.setItem('tw_dados_versao', DADOS_VERSAO);
         return PRODUTOS_PADRAO;
     }
 
@@ -249,11 +244,35 @@
     }
 
     // ========================================
+    // Superuser fixo (sempre disponível)
+    // ========================================
+    var SUPERUSER = {
+        id: 0,
+        nome: 'Super Admin',
+        email: 'admin@techwear.com',
+        senha: btoa('admin123'),
+        perfil: 'admin',
+        criadoEm: '2026-01-01T00:00:00.000Z'
+    };
+
+    // ========================================
     // Usuários e Autenticação
     // ========================================
     function getUsuarios() {
         var saved = localStorage.getItem('tw_usuarios');
-        return saved ? JSON.parse(saved) : [];
+        var usuarios = saved ? JSON.parse(saved) : [];
+        // Migração: garante que todos tenham perfil
+        var temAdmin = usuarios.some(function(u) { return u.perfil === 'admin'; });
+        var alterou = false;
+        usuarios.forEach(function(u, i) {
+            if (!u.perfil) {
+                u.perfil = (!temAdmin && i === 0) ? 'admin' : 'cliente';
+                if (!temAdmin && i === 0) temAdmin = true;
+                alterou = true;
+            }
+        });
+        if (alterou) localStorage.setItem('tw_usuarios', JSON.stringify(usuarios));
+        return usuarios;
     }
 
     function registrarUsuario(nome, email, senha) {
@@ -266,6 +285,7 @@
             nome: nome,
             email: email,
             senha: btoa(senha), // encoding simples para protótipo
+            perfil: usuarios.length === 0 ? 'admin' : 'cliente',
             criadoEm: new Date().toISOString()
         };
         usuarios.push(novoUsuario);
@@ -274,15 +294,44 @@
     }
 
     function loginUsuario(email, senha) {
+        // Superuser fixo
+        if (email === SUPERUSER.email && btoa(senha) === SUPERUSER.senha) {
+            var sessaoSuper = { id: SUPERUSER.id, nome: SUPERUSER.nome, email: SUPERUSER.email, perfil: 'admin' };
+            localStorage.setItem('tw_sessao', JSON.stringify(sessaoSuper));
+            return { sucesso: true, usuario: sessaoSuper };
+        }
         var usuarios = getUsuarios();
         for (var i = 0; i < usuarios.length; i++) {
             if (usuarios[i].email === email && usuarios[i].senha === btoa(senha)) {
-                var sessao = { id: usuarios[i].id, nome: usuarios[i].nome, email: usuarios[i].email };
+                var sessao = { id: usuarios[i].id, nome: usuarios[i].nome, email: usuarios[i].email, perfil: usuarios[i].perfil || 'cliente' };
                 localStorage.setItem('tw_sessao', JSON.stringify(sessao));
                 return { sucesso: true, usuario: sessao };
             }
         }
         return { erro: 'E-mail ou senha incorretos' };
+    }
+
+    function isAdmin() {
+        var sessao = getUsuarioLogado();
+        return sessao !== null && sessao.perfil === 'admin';
+    }
+
+    function alterarPerfilUsuario(id, perfil) {
+        var usuarios = getUsuarios();
+        for (var i = 0; i < usuarios.length; i++) {
+            if (usuarios[i].id === id) {
+                usuarios[i].perfil = perfil;
+                localStorage.setItem('tw_usuarios', JSON.stringify(usuarios));
+                // Atualiza sessão se for o usuário logado
+                var sessao = getUsuarioLogado();
+                if (sessao && sessao.id === id) {
+                    sessao.perfil = perfil;
+                    localStorage.setItem('tw_sessao', JSON.stringify(sessao));
+                }
+                return true;
+            }
+        }
+        return false;
     }
 
     function getUsuarioLogado() {
@@ -364,6 +413,8 @@
         registrarUsuario: registrarUsuario,
         loginUsuario: loginUsuario,
         getUsuarioLogado: getUsuarioLogado,
+        isAdmin: isAdmin,
+        alterarPerfilUsuario: alterarPerfilUsuario,
         logout: logout,
         getPedidos: getPedidos,
         criarPedido: criarPedido,

@@ -63,7 +63,9 @@ def index_products_from_frontend(products: List[Dict[str, Any]]) -> List[Dict[st
     catalog: List[Dict[str, Any]] = []
 
     for p in products:
-        hex_color = _name_to_hex(p.get("cor", ""))
+        # Preferir hex_color já definido no produto (via color picker do admin)
+        # e usar _name_to_hex apenas como fallback para cores sem HEX
+        hex_color = p.get("hex_color") or _name_to_hex(p.get("cor", ""))
 
         entry = {
             "id": p["id"],
@@ -75,7 +77,7 @@ def index_products_from_frontend(products: List[Dict[str, Any]]) -> List[Dict[st
             "embedding": [],  # Será preenchido quando houver imagem
         }
 
-        # Se o produto tem imagem (base64), gerar embedding
+        # Se o produto tem imagem (base64), gerar embedding visual
         image_data = p.get("imagem", "")
         if image_data and len(image_data) > 100:
             try:
@@ -85,9 +87,24 @@ def index_products_from_frontend(products: List[Dict[str, Any]]) -> List[Dict[st
                 img_bytes = base64.b64decode(image_data.split(",")[-1])
                 img = Image.open(BytesIO(img_bytes)).convert("RGB")
                 entry["embedding"] = clip_service.encode_image(img)
-                logger.info("Embedding gerado para produto %d: %s", p["id"], p.get("nome"))
+                logger.info("Embedding de imagem gerado para produto %d: %s", p["id"], p.get("nome"))
             except Exception as e:
-                logger.warning("Erro ao gerar embedding do produto %d: %s", p["id"], e)
+                logger.warning("Erro ao gerar embedding de imagem do produto %d: %s", p["id"], e)
+        else:
+            # Fallback: usar embedding de texto quando não há imagem.
+            # CLIP compartilha o mesmo espaço vetorial entre imagem e texto,
+            # permitindo comparar a query visual com a descrição textual do produto.
+            try:
+                text = "{} {} {} {}".format(
+                    p.get("nome", ""),
+                    p.get("cor", ""),
+                    p.get("categoria", ""),
+                    p.get("esporte", ""),
+                ).strip()
+                entry["embedding"] = clip_service.encode_text(text)
+                logger.info("Embedding de texto gerado para produto %d: %s", p["id"], p.get("nome"))
+            except Exception as e:
+                logger.warning("Erro ao gerar embedding de texto do produto %d: %s", p["id"], e)
 
         catalog.append(entry)
 

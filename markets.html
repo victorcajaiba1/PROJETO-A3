@@ -101,7 +101,7 @@ https://templatemo.com/tm-609-crypto-vault
                         <option value="shorts">Shorts</option>
                     </select>
                     <select id="filtroEsporte" class="filter-select">
-                        <option value="">Todos os Esportes</option>
+                        <option value="">Todos</option>
                         <option value="corrida">Corrida</option>
                         <option value="basquete">Basquete</option>
                         <option value="academia">Academia</option>
@@ -181,7 +181,7 @@ https://templatemo.com/tm-609-crypto-vault
             var busca = document.getElementById('filtroBusca').value.toLowerCase();
 
             if (categoria) produtos = produtos.filter(function(p) { return p.categoria === categoria; });
-            if (esporte) produtos = produtos.filter(function(p) { return p.esporte === esporte; });
+            if (esporte) produtos = produtos.filter(function(p) { return p.esporte === esporte || p.esporte === 'todos'; });
             if (busca) produtos = produtos.filter(function(p) { return p.nome.toLowerCase().indexOf(busca) !== -1; });
             if (ordem === 'menor') produtos.sort(function(a, b) { return a.preco - b.preco; });
             if (ordem === 'maior') produtos.sort(function(a, b) { return b.preco - a.preco; });

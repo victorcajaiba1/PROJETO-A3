@@ -1254,9 +1254,9 @@
 
             renderItems();
             renderDelivery();
-            renderBoleto();
-            renderInstallments();
-            drawQRCode();
+            try { renderBoleto(); } catch(e) { console.warn('[pagamento] renderBoleto:', e); }
+            try { renderInstallments(); } catch(e) { console.warn('[pagamento] renderInstallments:', e); }
+            try { drawQRCode(); } catch(e) { console.warn('[pagamento] drawQRCode:', e); }
             startPixTimer();
             updatePrices();
         }
@@ -1383,7 +1383,7 @@
         /* ── QR Code (visual) ── */
         function drawQRCode() {
             var canvas = document.getElementById('qrCanvas');
-            if (!canvas) return;
+            if (!canvas || !canvas.getContext) return;  /* ignora se for <img> */
             var ctx = canvas.getContext('2d');
             var size = 21;
             var cellSize = Math.floor(180 / size);

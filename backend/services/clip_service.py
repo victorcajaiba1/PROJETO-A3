@@ -44,6 +44,24 @@ class ClipService:
         features = features / features.norm(p=2, dim=-1, keepdim=True)
         return features.squeeze().cpu().tolist()
 
+    def encode_text(self, text: str) -> List[float]:
+        """Gera embedding de um texto usando CLIP.
+
+        Útil como fallback para produtos sem imagem, já que CLIP compartilha
+        o mesmo espaço de embeddings entre texto e imagem.
+
+        Returns:
+            Lista de floats representando o embedding normalizado.
+        """
+        self._load_model()
+        inputs = self._processor(text=[text], return_tensors="pt", padding=True, truncation=True).to(self._device)
+
+        with torch.no_grad():
+            features = self._model.get_text_features(**inputs)
+
+        features = features / features.norm(p=2, dim=-1, keepdim=True)
+        return features.squeeze().cpu().tolist()
+
     def cosine_similarity(self, embedding_a: List[float], embedding_b: List[float]) -> float:
         """Calcula similaridade cosseno entre dois embeddings."""
         a = np.array(embedding_a)

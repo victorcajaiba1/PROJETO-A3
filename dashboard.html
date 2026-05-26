@@ -9,6 +9,8 @@
         (function() {
             var savedTheme = localStorage.getItem('theme') || 'dark';
             document.documentElement.setAttribute('data-theme', savedTheme);
+            var sessao = JSON.parse(localStorage.getItem('tw_sessao') || 'null');
+            if (!sessao || sessao.perfil !== 'admin') { window.location.replace('markets.html'); }
         })();
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
