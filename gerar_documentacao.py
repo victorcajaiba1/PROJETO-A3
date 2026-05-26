@@ -250,8 +250,15 @@ def build_document():
         ("8", "REQUISITOS DO SISTEMA", "15"),
         ("8.1", "Requisitos Funcionais", "15"),
         ("8.2", "Requisitos Não Funcionais", "16"),
-        ("9", "CONSIDERAÇÕES FINAIS", "16"),
-        ("", "REFERÊNCIAS", "17"),
+        ("9", "FUNDAMENTOS MATEMÁTICOS APLICADOS", "17"),
+        ("9.1", "Cálculo de Frete — Modelo Logístico", "17"),
+        ("9.2", "Fórmula de Tempo de Entrega", "19"),
+        ("9.3", "Score de Prioridade de Despacho", "20"),
+        ("9.4", "Previsão de Vendas por Regressão Linear", "20"),
+        ("9.5", "Coeficiente de Determinação R²", "21"),
+        ("9.6", "Controle de Estoque — Modelo de Velocidade de Venda", "22"),
+        ("10", "CONSIDERAÇÕES FINAIS", "23"),
+        ("", "REFERÊNCIAS", "24"),
     ]
 
     for num, titulo, pag in sumario:
@@ -771,9 +778,328 @@ def build_document():
     doc.add_page_break()
 
     # ──────────────────────────────────────────
-    # 9. CONSIDERAÇÕES FINAIS
+    # 9. FUNDAMENTOS MATEMÁTICOS APLICADOS
     # ──────────────────────────────────────────
-    heading(doc, "9  CONSIDERAÇÕES FINAIS", font_size=12, bold=True)
+    heading(doc, "9  FUNDAMENTOS MATEMÁTICOS APLICADOS", font_size=12, bold=True)
+
+    body(doc,
+        "O sistema Tech Wear aplica modelos matemáticos concretos em três domínios "
+        "distintos: cálculo do custo logístico de frete, estimativa do prazo de entrega "
+        "e previsão de vendas com controle de estoque. Esta seção detalha as equações "
+        "implementadas no código-fonte, relacionando cada variável ao seu significado "
+        "no contexto do negócio."
+    )
+
+    # ── 9.1 Cálculo de Frete
+    heading(doc, "9.1  Cálculo de Frete — Modelo Logístico", font_size=12, bold=True, space_before=6)
+
+    body(doc,
+        "O módulo frete.html implementa um modelo completo de precificação logística "
+        "baseado na tabela ANTT (Agência Nacional de Transportes Terrestres), com "
+        "decomposição em oito etapas encadeadas. Todas as constantes foram extraídas "
+        "da regulamentação vigente."
+    )
+
+    body(doc, "Etapa 1 — Frete Base ANTT (equação de 1.º grau multiplicativa):")
+    doc.add_paragraph()
+
+    for line in ["Frete_ANTT  =  d  ×  T_ANTT",
+                 "",
+                 "onde:",
+                 "  d        = distância em quilômetros (km)",
+                 "  T_ANTT   = R$ 3,8866 / km  (tarifa ANTT vigente)"]:
+        code_block(doc, line)
+
+    doc.add_paragraph()
+    body(doc,
+        "Esta é uma equação do 1.º grau multiplicativa da forma y = k·x, em que o frete "
+        "cresce linearmente com a distância. O coeficiente angular k = R$ 3,8866 representa "
+        "o custo por quilômetro definido pela ANTT."
+    )
+
+    body(doc, "Etapa 2 — Rateio do Valor do Motorista:")
+    doc.add_paragraph()
+    for line in ["V_moto  =  Frete_ANTT  ÷  2"]:
+        code_block(doc, line)
+
+    doc.add_paragraph()
+    body(doc, "Etapa 3 — Cálculo de Pedágio (função de parte inteira):")
+    doc.add_paragraph()
+    for line in ["Pedagio  =  ⌊d ÷ 100⌋  ×  R$ 20,00",
+                 "",
+                 "Exemplo: d = 430 km  →  ⌊430/100⌋ = 4  →  Pedagio = R$ 80,00"]:
+        code_block(doc, line)
+
+    doc.add_paragraph()
+    body(doc, "Etapa 4 — Impostos (PIS, COFINS e ICMS — alíquota variável por UF):")
+    doc.add_paragraph()
+    for line in ["PIS      =  V_moto  ×  0,0165   (alíquota federal 1,65%)",
+                 "COFINS   =  V_moto  ×  0,0760   (alíquota federal 7,60%)",
+                 "ICMS     =  V_moto  ×  α_ICMS",
+                 "",
+                 "α_ICMS   =  0,07  (frete interestadual para regiões N/NE/CO/SE²)",
+                 "           0,12  (frete interno ou estados de maior alíquota: SP, RJ, MG, SC, PR)"]:
+        code_block(doc, line)
+
+    doc.add_paragraph()
+    body(doc, "Etapa 5 — Agregação dos impostos:")
+    doc.add_paragraph()
+    for line in ["TotalImp   =  ICMS  +  PIS  +  COFINS",
+                 "Frete_imp  =  V_moto  +  TotalImp"]:
+        code_block(doc, line)
+
+    doc.add_paragraph()
+    body(doc, "Etapa 6 — Frete final da viagem (margem de seguro + descarga fixa):")
+    doc.add_paragraph()
+    for line in ["Frete_final  =  (Frete_imp  ×  1,3015)  +  Pedagio  +  436,39",
+                 "",
+                 "onde:",
+                 "  1,3015  =  margem operacional (30%) + seguro de carga (0,15%)",
+                 "  436,39  =  custo fixo de descarga em R$"]:
+        code_block(doc, line)
+
+    doc.add_paragraph()
+    body(doc, "Etapa 7 — Volume real da carga (soma ponderada):")
+    doc.add_paragraph()
+    for line in ["V_real  =  Σ ( vol_i  ×  qtd_i )   para cada item i do pedido",
+                 "",
+                 "Volumes unitários por tipo de peça:",
+                 "  Camiseta / Acessório (Polymailer) :  0,005 m³  /  0,002 m³",
+                 "  Short / Calça / Legging           :  0,0075 m³",
+                 "  Moletom / Jaqueta                 :  0,012 m³  /  0,015 m³",
+                 "  Tênis                             :  0,020 m³"]:
+        code_block(doc, line)
+
+    doc.add_paragraph()
+    body(doc, "Etapa 8 — Rateio por pedido e multiplicador comercial:")
+    doc.add_paragraph()
+    for line in ["F_pedido       =  Frete_final  ×  (V_real  ÷  V_base)",
+                 "",
+                 "onde V_base = 2,64 m³  (80% da capacidade do veículo = 0,8 × 3,3 m³)",
+                 "",
+                 "Preco_cliente  =  F_pedido  ×  mult",
+                 "",
+                 "mult  =  1,50   se  V_real ≤ 0,01 m³  (envio muito pequeno)",
+                 "      =  1,20   se  0,01 < V_real ≤ 0,05 m³",
+                 "      =  1,00   se  V_real > 0,05 m³"]:
+        code_block(doc, line)
+
+    doc.add_paragraph()
+    body(doc,
+        "O rateio proporcional ao volume garante que pedidos menores paguem somente "
+        "a fração do veículo que efetivamente ocupam, tornando o modelo justo para "
+        "diferentes tamanhos de compra. O multiplicador comercial compensa os custos "
+        "fixos de manuseio que são relativamente maiores para volumes muito pequenos."
+    )
+
+    body(doc,
+        "Por fim, se o valor total do pedido superar R$ 200,00 (LIMITE_FRETE_GRATIS), "
+        "o sistema define automaticamente Preco_cliente = 0, concedendo frete grátis "
+        "como incentivo comercial à compra de maior valor."
+    )
+
+    # ── 9.2 Prazo de Entrega
+    heading(doc, "9.2  Fórmula de Tempo de Entrega", font_size=12, bold=True, space_before=6)
+
+    body(doc,
+        "O prazo de entrega é calculado pela fórmula cinemática elementar distância ÷ "
+        "velocidade, acrescida de correções para tortuosidade da rota, paradas "
+        "operacionais e horário de trânsito."
+    )
+
+    doc.add_paragraph()
+    for line in ["t_total  =  t_deslocamento  +  t_portarias  +  t_prep  +  margem",
+                 "",
+                 "t_deslocamento  =  dist_real  ÷  v_efetiva",
+                 "",
+                 "dist_real       =  d  ×  k_rota",
+                 "v_efetiva       =  v_nominal  ×  f_horário",
+                 "",
+                 "t_portarias     =  n  ×  t_serviço",
+                 "",
+                 "Parâmetros por veículo:",
+                 "  Motoboy :  v_nominal = 40 km/h,  k_rota = 1,10,  t_serviço = 4 min",
+                 "  Van     :  v_nominal = 50 km/h,  k_rota = 1,30,  t_serviço = 7 min",
+                 "",
+                 "Fatores de horário (f_horário):",
+                 "  Horário normal    :  Motoboy = 0,90  /  Van = 0,70",
+                 "  Horário de pico   :  Motoboy = 0,85  /  Van = 0,50",
+                 "  Madrugada         :  Motoboy = 1,00  /  Van = 1,00"]:
+        code_block(doc, line)
+
+    doc.add_paragraph()
+    body(doc,
+        "O fator k_rota corrige que a distância real percorrida em vias urbanas é maior "
+        "que a distância em linha reta entre origem e destino (1,10 para motoboy em "
+        "rotas mais diretas e 1,30 para van em rotas de maior porte). O fator de horário "
+        "f_horário penaliza a velocidade efetiva nos períodos de congestionamento, "
+        "chegando a reduzir a velocidade da van para 50% em horário de pico."
+    )
+
+    # ── 9.3 Score de Prioridade
+    heading(doc, "9.3  Score de Prioridade de Despacho (Sp)", font_size=12, bold=True, space_before=6)
+
+    body(doc,
+        "O Score de Prioridade Sp determina a urgência do despacho do pedido, sendo uma "
+        "média ponderada de dois critérios definidos pelo operador:"
+    )
+
+    doc.add_paragraph()
+    for line in ["Sp  =  (Urgência × 0,6)  +  (Densidade × 0,4)",
+                 "",
+                 "onde:",
+                 "  Urgência   = nota de 1 a 10 (quanto maior, mais urgente o cliente)",
+                 "  Densidade  = nota de 1 a 10 (densidade operacional da rota)",
+                 "  0,6 e 0,4  = pesos que somam 1,0 (urgência tem maior peso)"]:
+        code_block(doc, line)
+
+    doc.add_paragraph()
+    body(doc,
+        "Esta é uma equação do 1.º grau aditiva com dois termos ponderados. O resultado "
+        "Sp varia de 1,0 a 10,0, sendo exibido no painel de resultados para auxiliar "
+        "o operador logístico na priorização dos despachos do dia."
+    )
+
+    # ── 9.4 Previsão de Vendas
+    heading(doc, "9.4  Previsão de Vendas por Regressão Linear Simples", font_size=12, bold=True, space_before=6)
+
+    body(doc,
+        "O dashboard utiliza regressão linear simples (Mínimos Quadrados Ordinários — MQO) "
+        "para projetar a receita e o número de pedidos do próximo mês, com base no histórico "
+        "de períodos anteriores armazenados no localStorage. O modelo ajusta a reta "
+        "ŷ = m·x + b que minimiza a soma dos quadrados dos erros (SSR)."
+    )
+
+    doc.add_paragraph()
+    for line in ["Dado um vetor de n observações históricas y₀, y₁, ..., y_{n-1}",
+                 "onde cada índice x_i = i representa o período (0 = mais antigo):",
+                 "",
+                 "Coeficiente angular (tendência):",
+                 "  m  =  (n · Σ(x_i · y_i)  −  Σx_i · Σy_i)",
+                 "        ─────────────────────────────────────",
+                 "        (n · Σx_i²  −  (Σx_i)²)",
+                 "",
+                 "Intercepto:",
+                 "  b  =  (Σy_i  −  m · Σx_i)  ÷  n",
+                 "",
+                 "Previsão do próximo período (x = n):",
+                 "  ŷ(n)  =  max(0,  m · n  +  b)",
+                 "",
+                 "O max(0, …) garante que previsões negativas sejam tratadas como zero."]:
+        code_block(doc, line)
+
+    doc.add_paragraph()
+    body(doc,
+        "O coeficiente angular m indica a tendência de crescimento (m > 0) ou queda "
+        "(m < 0) das vendas por período. O intercepto b representa o valor base estimado "
+        "no período zero. A função max(0, ŷ) é aplicada pois receita e número de pedidos "
+        "não podem ser negativos no contexto do negócio."
+    )
+
+    body(doc,
+        "Os KPIs exibidos no dashboard a partir da previsão são:"
+    )
+    bullet(doc, "Receita Prevista: ŷ_receita(n) — projeção financeira do próximo mês;")
+    bullet(doc, "Pedidos Previstos: round(ŷ_pedidos(n)) — projeção operacional;")
+    bullet(doc, "Ticket Médio Previsto: Receita Prevista ÷ Pedidos Previstos;")
+    bullet(doc, "Variação percentual: (ŷ(n) − y_{n-1}) ÷ y_{n-1} × 100%.")
+
+    doc.add_paragraph()
+
+    # ── 9.5 Coeficiente R²
+    heading(doc, "9.5  Coeficiente de Determinação R²  (Confiança do Modelo)", font_size=12, bold=True, space_before=6)
+
+    body(doc,
+        "Para quantificar a confiança da previsão, o sistema calcula o coeficiente de "
+        "determinação R², que mede a proporção da variância total dos dados explicada "
+        "pelo modelo de regressão. O valor varia entre 0 e 1: quanto mais próximo de 1, "
+        "melhor o ajuste da reta ao histórico real."
+    )
+
+    doc.add_paragraph()
+    for line in ["SS_tot  =  Σ (y_i  −  ȳ)²         (variância total)",
+                 "SS_res  =  Σ (y_i  −  ŷ_i)²       (erro residual da regressão)",
+                 "",
+                 "R²  =  1  −  (SS_res  ÷  SS_tot)",
+                 "",
+                 "onde  ȳ = média aritmética de todos os y_i",
+                 "e    ŷ_i = m · i + b  (valor predito pela reta para o período i)"]:
+        code_block(doc, line)
+
+    doc.add_paragraph()
+    body(doc,
+        "O dashboard classifica a confiança em três faixas:"
+    )
+
+    confianca_rows = [
+        ("R² ≥ 0,75", "Alta", "Tendência histórica clara; previsão confiável"),
+        ("0,40 ≤ R² < 0,75", "Média", "Tendência moderada; usar com cautela"),
+        ("R² < 0,40", "Baixa", "Dados muito dispersos; coletar mais histórico"),
+    ]
+    add_table(doc,
+        ["Intervalo de R²", "Classificação", "Interpretação"],
+        confianca_rows,
+        col_widths=[4, 3, 9]
+    )
+
+    doc.add_paragraph()
+
+    # ── 9.6 Controle de Estoque
+    heading(doc, "9.6  Controle de Estoque — Modelo de Velocidade de Venda", font_size=12, bold=True, space_before=6)
+
+    body(doc,
+        "O painel de estoque do dashboard utiliza um modelo baseado na velocidade de "
+        "venda dos últimos 30 dias para estimar o prazo até a ruptura e a quantidade "
+        "a repor, com uma margem de segurança de 20%."
+    )
+
+    doc.add_paragraph()
+    for line in ["vel_30    =  Σ(qtd vendida do produto nos últimos 30 dias)",
+                 "vel_dia   =  vel_30  ÷  30              (unidades por dia)",
+                 "",
+                 "Fórmulas derivadas:",
+                 "",
+                 "Dias até ruptura:",
+                 "  t_ruptura  =  estoque_atual  ÷  vel_dia",
+                 "              (→ ∞ se vel_dia = 0, produto sem movimento)",
+                 "",
+                 "Estoque estimado em 30 dias:",
+                 "  est_30d  =  estoque_atual  −  vel_30",
+                 "",
+                 "Quantidade recomendada para reposição:",
+                 "  Q_rec  =  ⌈ vel_30  ×  1,20 ⌉       (+20% margem de segurança)",
+                 "  Q_rep  =  max(0,  Q_rec  −  estoque_atual)"]:
+        code_block(doc, line)
+
+    doc.add_paragraph()
+    body(doc,
+        "O fator de margem de segurança 1,20 garante um estoque-tampão de 20% acima "
+        "da demanda histórica para absorver variações sazonais e atrasos no "
+        "reabastecimento. O operador de teto ⌈·⌉ (arredondamento para cima) assegura "
+        "que a recomendação seja sempre um número inteiro de unidades."
+    )
+
+    body(doc, "Critérios de classificação do status de estoque:")
+
+    status_rows = [
+        ("Sem movimento", "vel_30 = 0", "Produto parado; avaliar promoção ou descontinuação"),
+        ("Crítico", "t_ruptura ≤ 15 dias", "Reposição urgente necessária"),
+        ("Atenção", "15 < t_ruptura ≤ 45 dias", "Planejar reposição em breve"),
+        ("OK", "t_ruptura > 45 dias", "Estoque saudável para o período"),
+    ]
+    add_table(doc,
+        ["Status", "Condição", "Ação recomendada"],
+        status_rows,
+        col_widths=[3, 4.5, 8.5]
+    )
+
+    doc.add_paragraph()
+    doc.add_page_break()
+
+    # ──────────────────────────────────────────
+    # 10. CONSIDERAÇÕES FINAIS
+    # ──────────────────────────────────────────
+    heading(doc, "10  CONSIDERAÇÕES FINAIS", font_size=12, bold=True)
 
     body(doc,
         "O sistema Tech Wear demonstra a viabilidade de integrar técnicas modernas de "
@@ -782,6 +1108,17 @@ def build_document():
         "claramente as responsabilidades: o frontend gerencia a experiência do usuário "
         "e a persistência local, enquanto o backend executa tarefas computacionalmente "
         "intensivas de processamento de imagens."
+    )
+
+    body(doc,
+        "Além do módulo de inteligência artificial, o sistema aplica modelos matemáticos "
+        "rigorosos em seus processos de negócio: o cálculo de frete utiliza equações do "
+        "1.º grau multiplicativas e aditivas baseadas na tabela ANTT, com decomposição "
+        "de impostos (PIS, COFINS, ICMS) e rateio proporcional ao volume; o prazo de "
+        "entrega é estimado pela fórmula cinemática clássica t = d/v com correções de "
+        "tortuosidade e fator de horário; e a previsão de vendas é calculada por regressão "
+        "linear simples (MQO) com coeficiente R² como indicador de confiança, conforme "
+        "detalhado no Capítulo 9."
     )
 
     body(doc,
@@ -845,7 +1182,11 @@ def build_document():
     # Salvar
     # ──────────────────────────────────────────
     output_path = "Documentacao_TechWear_ABNT.docx"
-    doc.save(output_path)
+    try:
+        doc.save(output_path)
+    except PermissionError:
+        output_path = "Documentacao_TechWear_ABNT_v2.docx"
+        doc.save(output_path)
     print(f"Documento gerado com sucesso: {output_path}")
 
 
