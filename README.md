@@ -200,9 +200,52 @@ A documentação técnica completa em formato **ABNT** está disponível em:
 
 ---
 
-## 👥 Equipe
+## 👥 Participantes
 
-Desenvolvido como Projeto A3 para a disciplina de **Análise e Projeto de Sistemas** da **Universidade São Judas Tadeu (USJT)**.
+<table>
+  <tr>
+    <td align="center">
+      <a href="https://github.com/ArthurMedinaDev">
+        <img src="https://github.com/ArthurMedinaDev.png" width="100px;" alt="Arthur"/><br>
+        <sub><b>Arthur Medina</b></sub>
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/carloshenriquess23">
+        <img src="https://github.com/carloshenriquess23.png" width="100px;" alt="Carlos"/><br>
+        <sub><b>Carlos Henrique</b></sub>
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/Lucas14almeida">
+        <img src="https://github.com/Lucas14almeida.png" width="100px;" alt="Lucas"/><br>
+        <sub><b>Lucas Almeida</b></sub>
+      </a>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <a href="https://github.com/ThiagoCruz00">
+        <img src="https://github.com/ThiagoCruz00.png" width="100px;" alt="Thiago"/><br>
+        <sub><b>Thiago Cruz</b></sub>
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/tteuwm">
+        <img src="https://github.com/tteuwm.png" width="100px;" alt="Matheus"/><br>
+        <sub><b>Matheus</b></sub>
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/victorcajaiba1">
+        <img src="https://github.com/victorcajaiba1.png" width="100px;" alt="Victor"/><br>
+        <sub><b>Victor Cajaiba</b></sub>
+      </a>
+    </td>
+  </tr>
+</table>
+
+Desenvolvido como Projeto A3 para a disciplina de **Matemática Computacional Aplicada** da **Universidade São Judas Tadeu (USJT)**.
 
 ---
 
