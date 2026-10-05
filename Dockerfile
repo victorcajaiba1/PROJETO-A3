@@ -15,11 +15,13 @@ RUN apt-get update \
 
 WORKDIR /app
 
-# PyTorch versão CPU (a versão padrão do PyPI traz CUDA e passa de 2 GB)
-RUN pip install torch==2.4.1 torchvision==0.19.1 --index-url https://download.pytorch.org/whl/cpu
-
+# Tudo num único pip install: o PyTorch versão CPU (a do PyPI traz CUDA e passa
+# de 2 GB) vem do índice extra, e o numpy 2.x nunca chega a ser instalado.
+# Instalar o torch numa camada e trocar o numpy em outra deixava arquivos do
+# numpy 2.x no container e quebrava o boot ("numpy._core.multiarray failed").
 COPY backend/requirements.txt backend/requirements.txt
-RUN pip install -r backend/requirements.txt \
+RUN pip install torch==2.4.1+cpu torchvision==0.19.1+cpu -r backend/requirements.txt \
+        --extra-index-url https://download.pytorch.org/whl/cpu \
     && python -c "import numpy, scipy.sparse, sklearn.cluster, cv2, torch, transformers, ultralytics; \
 assert numpy.__version__ == '1.26.4', numpy.__version__"
 
