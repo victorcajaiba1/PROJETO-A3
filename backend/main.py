@@ -2,6 +2,7 @@
 
 import logging
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import pillow_heif
@@ -9,8 +10,11 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
+from backend.auth import router as auth_router
+from backend.db import aplicar_schema
 from backend.routes.image_search import router as image_router
 from backend.routes.pedidos import router as pedidos_router
+from backend.routes.produtos import router as produtos_router
 
 # Registra o plugin AVIF/HEIC no Pillow. Sem isso, Image.open() rejeita fotos
 # .avif/.heic (comuns em downloads do Unsplash e fotos de iPhone) com
@@ -36,10 +40,17 @@ ALLOWED_EXTENSIONS = {
 }
 BLOCKED_DIRS = {"backend", ".git", ".venv", "venv", "node_modules"}
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    aplicar_schema()
+    yield
+
+
 app = FastAPI(
     title="Tech Wear — WearIA API",
     description="Busca visual de roupas esportivas com YOLO + CLIP + cor HEX",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 # CORS — útil quando o frontend é aberto por outro endereço (ex.: file://)
@@ -53,6 +64,8 @@ app.add_middleware(
 # Rotas da API
 app.include_router(image_router, prefix="/api", tags=["Busca Visual"])
 app.include_router(pedidos_router, prefix="/api", tags=["Pedidos"])
+app.include_router(produtos_router, prefix="/api", tags=["Produtos"])
+app.include_router(auth_router, prefix="/api", tags=["Admin"])
 
 
 @app.get("/api/health")

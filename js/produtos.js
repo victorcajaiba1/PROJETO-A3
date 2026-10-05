@@ -446,8 +446,8 @@
     function getProdutos() {
         var saved = localStorage.getItem('tw_produtos');
         var versao = localStorage.getItem('tw_dados_versao');
-        // Catálogo vindo do Firebase é a fonte oficial: não mexer
-        if (saved && (versao === DADOS_VERSAO || versao === 'firebase')) return JSON.parse(saved);
+        // Catálogo vindo do banco (js/catalogo-db.js) é a fonte oficial: não mexer
+        if (saved && (versao === DADOS_VERSAO || versao === 'servidor')) return JSON.parse(saved);
         if (saved) localStorage.removeItem('tw_carrinho');
         localStorage.setItem('tw_produtos', JSON.stringify(PRODUTOS_PADRAO));
         localStorage.setItem('tw_dados_versao', DADOS_VERSAO);

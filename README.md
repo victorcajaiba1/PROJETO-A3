@@ -56,14 +56,20 @@ Projeto USJT/
 ├── css/                  # Estilos CSS globais e por página
 ├── img/produtos/         # Fotos do catálogo padrão (créditos em CREDITOS.md)
 ├── js/
-│   ├── produtos.js       # API global window.TechWear (localStorage)
-│   ├── wearia.js         # Integração com o backend de IA (usa /api no mesmo servidor)
-│   └── firebase-config.js
+│   ├── produtos.js       # API global window.TechWear (cópia local em localStorage)
+│   ├── catalogo-db.js    # Catálogo no PostgreSQL via /api/produtos
+│   └── wearia.js         # Integração com o backend de IA (usa /api no mesmo servidor)
+│
+├── database/             # Schema PostgreSQL (01), procedures (02) e dados iniciais (03)
 │
 └── backend/              # API Python (FastAPI)
     ├── main.py           # Entrada: API + entrega do frontend
+    ├── db.py             # Conexão PostgreSQL; aplica database/01 e 02 a cada boot
+    ├── auth.py           # Login do admin (ADMIN_PASSWORD) para alterar o catálogo
     ├── routes/
-    │   └── image_search.py   # Endpoints REST
+    │   ├── image_search.py   # Busca visual
+    │   ├── produtos.py       # Catálogo (CRUD)
+    │   └── pedidos.py        # Checkout → pedidos, itens, pagamento e entrega
     ├── services/
     │   ├── yolo_service.py   # Detecção de roupas (YOLOv8)
     │   ├── clip_service.py   # Embeddings visuais (CLIP)
@@ -117,6 +123,11 @@ O repositório já tem `Dockerfile` e `railway.json`:
 1. Na Railway: **New Project → Deploy from GitHub repo** e selecione este repositório.
 2. A Railway detecta o `Dockerfile`, faz o build (PyTorch CPU + modelos já baixados) e usa a variável `PORT` automaticamente.
 3. Em **Settings → Networking**, clique em **Generate Domain**.
+4. Adicione um **PostgreSQL** ao projeto e, nas variáveis do serviço do site, defina:
+   - `DATABASE_URL` = `${{Postgres.DATABASE_URL}}`
+   - `ADMIN_PASSWORD` = senha pedida pelo painel Admin ao salvar produtos
+   - `SECRET_KEY` = texto aleatório longo (assina o token do admin)
+5. Rode `database/03_seed.sql` uma vez para carregar o catálogo inicial. Tabelas e procedures são criadas sozinhas no boot.
 
 Health check: `GET /api/health`. Recomenda-se pelo menos **2 GB de RAM** no serviço (YOLO + CLIP carregados em memória).
 
@@ -132,6 +143,12 @@ Ou pela CLI: `railway init` e depois `railway up`.
 | `GET` | `/` | Frontend (`index.html`) |
 | `POST` | `/api/search-by-image` | Busca produtos por imagem (multipart) |
 | `POST` | `/api/index-products` | Indexa catálogo do frontend com embeddings |
+| `GET` | `/api/produtos` | Catálogo ativo (formato do frontend) |
+| `POST` | `/api/produtos` | Cria produto (admin) |
+| `PUT` | `/api/produtos/{id}` | Edita produto (admin) |
+| `DELETE` | `/api/produtos/{id}` | Desativa produto, mantendo o histórico de pedidos (admin) |
+| `POST` | `/api/admin/login` | Troca `ADMIN_PASSWORD` por um token válido por 12 h |
+| `POST` | `/api/pedidos` | Grava pedido, itens, pagamento e entrega numa transação |
 
 ---
 
@@ -175,17 +192,20 @@ Ou pela CLI: `railway init` e depois `railway up`.
 
 ---
 
-## 💾 Persistência de Dados (LocalStorage)
+## 💾 Persistência de Dados
+
+Catálogo e pedidos ficam no **PostgreSQL** (`database/01_schema.sql`). O navegador guarda uma cópia do catálogo e os dados de sessão no `localStorage`:
 
 | Chave | Conteúdo |
 |---|---|
-| `tw_produtos` | Catálogo de produtos (array) |
+| `tw_produtos` | Cópia do catálogo vinda de `/api/produtos` |
+| `tw_produtos_backup` | Catálogo editado neste navegador antes do banco (o Admin oferece publicar) |
 | `tw_carrinho` | Itens no carrinho |
 | `tw_usuarios` | Usuários cadastrados |
 | `tw_sessao` | Usuário logado |
 | `tw_pedidos` | Histórico de pedidos (`subtotal` = produtos, `total` = valor pago com frete, desconto e juros) |
 | `tw_perfil_<id>` | Dados de perfil de cada usuário |
-| `tw_dados_versao` | Versão do catálogo padrão (adiciona produtos novos sem apagar os cadastrados) |
+| `tw_dados_versao` | `servidor` quando o catálogo veio do banco; senão, versão do catálogo padrão |
 
 ---
 

@@ -96,6 +96,21 @@
                 </div>
             </div>
 
+            <!-- Catálogo editado só neste navegador, antes de o banco ser a fonte oficial -->
+            <div class="card" id="backupLocalCard" style="display:none;margin-bottom:24px;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;border:1px solid var(--accent-copper);">
+                <div style="display:flex;align-items:center;gap:14px;">
+                    <span class="material-symbols-outlined" style="font-size:24px;color:var(--accent-copper);">cloud_upload</span>
+                    <div>
+                        <div style="font-size:15px;font-weight:700;color:var(--text-primary);">Catálogo editado só neste navegador</div>
+                        <div style="font-size:13px;color:var(--text-secondary);" id="backupLocalInfo"></div>
+                    </div>
+                </div>
+                <div style="display:flex;gap:8px;">
+                    <button class="btn" id="btnDescartarBackup">Descartar</button>
+                    <button class="btn primary" id="btnPublicarBackup">Publicar no banco</button>
+                </div>
+            </div>
+
             <!-- Atalho para Simulador de Frete -->
             <div class="card" style="margin-bottom:24px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
                 <div style="display:flex;align-items:center;gap:14px;">
@@ -315,11 +330,7 @@
         </div>
     </div>
 
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
-    <script src="js/firebase-config.js"></script>
-    <script src="js/firebase-db.js"></script>
+    <script src="js/catalogo-db.js"></script>
     <script src="js/produtos.js"></script>
     <script src="js/templatemo-crypto-script.js"></script>
     <script>
@@ -409,8 +420,8 @@
             TechWearDB.removerProduto(id).then(function() {
                 renderAll();
                 showToast('Produto removido');
-            }).catch(function() {
-                showToast('Erro ao remover produto');
+            }).catch(function(err) {
+                showToast('Erro ao remover produto: ' + err.message);
             });
         };
 
@@ -437,7 +448,7 @@
                     ctx.fillRect(0, 0, w, h);
                     ctx.drawImage(img, 0, 0, w, h);
                     var dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-                    // Gera também um arquivo JPEG para o upload no Firebase Storage
+                    // Gera também um arquivo JPEG (a foto vai ao banco como data URL)
                     var bin = atob(dataUrl.split(',')[1]);
                     var bytes = new Uint8Array(bin.length);
                     for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
@@ -581,7 +592,7 @@
                     renderAll();
                     showToast('Produto atualizado!');
                 })
-                .catch(function() { showToast('Erro ao salvar produto'); })
+                .catch(function(err) { showToast('Erro ao salvar produto: ' + err.message); })
                 .then(restaurarBtnEdit, restaurarBtnEdit);
         });
 
@@ -628,7 +639,7 @@
                     renderAll();
                     showToast('Produto adicionado!');
                 })
-                .catch(function() { showToast('Erro ao adicionar produto'); })
+                .catch(function(err) { showToast('Erro ao adicionar produto: ' + err.message); })
                 .then(restaurarBtnAdd, restaurarBtnAdd);
         });
 
@@ -668,7 +679,39 @@
         };
 
         function renderAll() { renderStats(); renderProdutos(); renderPedidos(); renderUsuarios(); }
-        TechWearDB.init(function() { renderAll(); });
+        function renderBackupLocal() {
+            var backup = TechWearDB.getBackupLocal();
+            var card = document.getElementById('backupLocalCard');
+            card.style.display = backup ? 'flex' : 'none';
+            if (backup) {
+                document.getElementById('backupLocalInfo').textContent =
+                    backup.length + ' produtos editados aqui antes de o catálogo ir para o banco. ' +
+                    'Publique para o banco ficar igual a esta lista, ou descarte para usar o catálogo do banco.';
+            }
+        }
+
+        document.getElementById('btnPublicarBackup').addEventListener('click', function() {
+            if (!confirm('O catálogo do banco ficará igual ao deste navegador (produtos fora da lista serão removidos). Continuar?')) return;
+            var btn = this;
+            btn.disabled = true;
+            btn.textContent = 'Publicando...';
+            TechWearDB.publicarBackupLocal()
+                .then(function() {
+                    renderBackupLocal();
+                    renderAll();
+                    showToast('Catálogo publicado no banco!');
+                })
+                .catch(function(err) { showToast('Erro ao publicar: ' + err.message); })
+                .then(function() { btn.disabled = false; btn.textContent = 'Publicar no banco'; });
+        });
+
+        document.getElementById('btnDescartarBackup').addEventListener('click', function() {
+            if (!confirm('Descartar as edições feitas só neste navegador?')) return;
+            TechWearDB.descartarBackupLocal();
+            renderBackupLocal();
+        });
+
+        TechWearDB.init(function() { renderAll(); renderBackupLocal(); });
     })();
     </script>
 </body>
