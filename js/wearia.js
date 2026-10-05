@@ -5,7 +5,48 @@
 (function () {
     'use strict';
 
-    var API_BASE = 'http://localhost:8000/api';
+    // Categorias devolvidas pelo backend → rótulo na tela
+    var CATEGORIA_LABEL = {
+        camisetas: 'Camisetas',
+        calcas: 'Calças',
+        jaquetas: 'Jaquetas',
+        moletons: 'Moletons',
+        shorts: 'Shorts'
+    };
+
+    // Onde está a API: no mesmo servidor (uvicorn serve site + API) ou, se o site
+    // foi aberto por outro servidor (Live Server :5500, file://), no backend local :8000.
+    var API_CANDIDATOS = window.location.protocol === 'file:'
+        ? ['http://localhost:8000/api', 'http://127.0.0.1:8000/api']
+        : ['/api', 'http://localhost:8000/api', 'http://127.0.0.1:8000/api'];
+    var API_BASE = null;
+    var apiPromise = null;
+
+    function testarApi(base) {
+        var ctrl = window.AbortController ? new AbortController() : null;
+        var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, 2000) : null;
+        return fetch(base + '/health', ctrl ? { signal: ctrl.signal } : {})
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (d) {
+                if (timer) clearTimeout(timer);
+                if (!d || d.status !== 'online') throw new Error('sem API em ' + base);
+                return base;
+            });
+    }
+
+    // Testa os endereços em ordem e guarda o primeiro que responder
+    function resolverApi() {
+        if (apiPromise) return apiPromise;
+        apiPromise = API_CANDIDATOS.reduce(function (prev, base) {
+            return prev.catch(function () { return testarApi(base); });
+        }, Promise.reject()).then(function (base) {
+            API_BASE = base;
+            return base;
+        });
+        // Se falhar, tenta de novo na próxima busca (o backend pode ter subido depois)
+        apiPromise.catch(function () { apiPromise = null; });
+        return apiPromise;
+    }
 
     // DOM
     var uploadZone = document.getElementById('uploadZone');
@@ -19,6 +60,7 @@
     var colorSwatch = document.getElementById('colorSwatch');
     var colorHex = document.getElementById('colorHex');
     var detectedCategory = document.getElementById('detectedCategory');
+    var detectedCategoryLabel = document.getElementById('detectedCategoryLabel');
     var loadingSection = document.getElementById('loadingSection');
     var resultsSection = document.getElementById('resultsSection');
     var resultsGrid = document.getElementById('resultsGrid');
@@ -165,12 +207,23 @@
         loadingSection.style.display = '';
         searchBtn.disabled = true;
 
-        // Primeiro sincronizar catálogo, depois buscar
-        syncCatalog().then(function () {
+        var produtos = getProdutosFiltrados();
+        if (!produtos.length) {
+            loadingSection.style.display = 'none';
+            searchBtn.disabled = false;
+            noResultsState.style.display = '';
+            return;
+        }
+
+        // Achar o backend, sincronizar catálogo (já filtrado) e buscar
+        resolverApi().then(function () {
+            return syncCatalog(produtos);
+        }).then(function () {
             return uploadAndSearch();
         }).catch(function (err) {
             // Se o backend não estiver disponível, usar busca local (fallback)
             console.warn('Backend indisponível, usando busca local:', err);
+            showToast('Servidor de IA offline — busca apenas por cor.');
             performLocalSearch();
         }).finally(function () {
             loadingSection.style.display = 'none';
@@ -178,18 +231,34 @@
         });
     }
 
-    function syncCatalog() {
+    // Produtos que respeitam os filtros de esporte e tipo de peça escolhidos pelo usuário
+    function getProdutosFiltrados() {
         var produtos = window.TechWear ? window.TechWear.getProdutos() : [];
+        var esporteVal = filtroEsporte.value;
+        var categoriaVal = filtroCategoria.value;
+        return produtos.filter(function (p) {
+            if (esporteVal && p.esporte !== esporteVal && p.esporte !== 'todos') return false;
+            if (categoriaVal && p.categoria !== categoriaVal) return false;
+            return true;
+        });
+    }
+
+    function syncCatalog(produtos) {
         return fetch(API_BASE + '/index-products', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(produtos)
-        }).then(function (r) { return r.json(); });
+        }).then(function (r) {
+            if (!r.ok) throw new Error('Erro ' + r.status);
+            return r.json();
+        });
     }
 
     function uploadAndSearch() {
         var formData = new FormData();
         formData.append('file', selectedFile);
+        // Tipo de peça escolhido guia o recorte da foto no backend
+        if (filtroCategoria.value) formData.append('category', filtroCategoria.value);
 
         return fetch(API_BASE + '/search-by-image', {
             method: 'POST',
@@ -200,8 +269,9 @@
             return res.json();
         })
         .then(function (data) {
-            showDetection(data.detected_hex, data.detected_category);
+            showDetection(data.detected_hex, CATEGORIA_LABEL[data.detected_category] || 'Não identificada', 'Peça detectada');
             showResults(data.products);
+            showOtherProducts(data.products || []);
         });
     }
 
@@ -310,28 +380,87 @@
     }
 
     /**
-     * Distância euclidiana entre duas cores RGB
+     * RGB [0-255] → CIELAB (D65), espaço de cor que imita a percepção humana
      */
-    function colorDist(a, b) {
-        return Math.sqrt(
-            Math.pow(a[0] - b[0], 2) +
-            Math.pow(a[1] - b[1], 2) +
-            Math.pow(a[2] - b[2], 2)
-        );
+    function rgbToLab(c) {
+        var lin = c.map(function (v) {
+            v = v / 255;
+            return v > 0.04045 ? Math.pow((v + 0.055) / 1.055, 2.4) : v / 12.92;
+        });
+        var x = (lin[0] * 0.4124 + lin[1] * 0.3576 + lin[2] * 0.1805) / 0.95047;
+        var y = lin[0] * 0.2126 + lin[1] * 0.7152 + lin[2] * 0.0722;
+        var z = (lin[0] * 0.0193 + lin[1] * 0.1192 + lin[2] * 0.9505) / 1.08883;
+        var f = function (t) { return t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116; };
+        return [116 * f(y) - 16, 500 * (f(x) - f(y)), 200 * (f(y) - f(z))];
+    }
+
+    /**
+     * Diferença de cor perceptual CIEDE2000 entre duas cores RGB.
+     * Mesma fórmula do backend (backend/services/color_service.py).
+     */
+    function colorDist(rgbA, rgbB) {
+        var A = rgbToLab(rgbA), B = rgbToLab(rgbB);
+        var rad = Math.PI / 180, deg = 180 / Math.PI;
+        var C1 = Math.hypot(A[1], A[2]), C2 = Math.hypot(B[1], B[2]);
+        var Cb = (C1 + C2) / 2;
+        var G = 0.5 * (1 - Math.sqrt(Math.pow(Cb, 7) / (Math.pow(Cb, 7) + Math.pow(25, 7))));
+        var a1 = (1 + G) * A[1], a2 = (1 + G) * B[1];
+        var C1p = Math.hypot(a1, A[2]), C2p = Math.hypot(a2, B[2]);
+        var h1 = (Math.atan2(A[2], a1) * deg + 360) % 360;
+        var h2 = (Math.atan2(B[2], a2) * deg + 360) % 360;
+        var dL = B[0] - A[0], dC = C2p - C1p, dh = 0;
+        if (C1p * C2p !== 0) {
+            dh = h2 - h1;
+            if (dh > 180) dh -= 360; else if (dh < -180) dh += 360;
+        }
+        var dH = 2 * Math.sqrt(C1p * C2p) * Math.sin(dh / 2 * rad);
+        var Lb = (A[0] + B[0]) / 2, Cpb = (C1p + C2p) / 2, hb;
+        if (C1p * C2p === 0) hb = h1 + h2;
+        else if (Math.abs(h1 - h2) <= 180) hb = (h1 + h2) / 2;
+        else hb = (h1 + h2 < 360) ? (h1 + h2 + 360) / 2 : (h1 + h2 - 360) / 2;
+        var T = 1 - 0.17 * Math.cos((hb - 30) * rad) + 0.24 * Math.cos(2 * hb * rad) +
+                0.32 * Math.cos((3 * hb + 6) * rad) - 0.20 * Math.cos((4 * hb - 63) * rad);
+        var SL = 1 + 0.015 * Math.pow(Lb - 50, 2) / Math.sqrt(20 + Math.pow(Lb - 50, 2));
+        var SC = 1 + 0.045 * Cpb, SH = 1 + 0.015 * Cpb * T;
+        var RT = -2 * Math.sqrt(Math.pow(Cpb, 7) / (Math.pow(Cpb, 7) + Math.pow(25, 7))) *
+                 Math.sin(60 * Math.exp(-Math.pow((hb - 275) / 25, 2)) * rad);
+        return Math.sqrt(Math.pow(dL / SL, 2) + Math.pow(dC / SC, 2) + Math.pow(dH / SH, 2) +
+                         RT * (dC / SC) * (dH / SH));
+    }
+
+    /**
+     * Matiz (0–360°) e croma de uma cor RGB, no espaço LCh
+     */
+    function rgbToLch(c) {
+        var lab = rgbToLab(c);
+        return {
+            L: lab[0],
+            C: Math.hypot(lab[1], lab[2]),
+            h: (Math.atan2(lab[2], lab[1]) * 180 / Math.PI + 360) % 360
+        };
+    }
+
+    /**
+     * Similaridade de cor entre 0 e 1 (mesma fórmula do backend):
+     * sim_cor = 0,6 × sim_matiz + 0,4 × (1 − ΔE2000 / 50)
+     */
+    function colorSimilarity(rgbA, rgbB) {
+        var A = rgbToLch(rgbA), B = rgbToLch(rgbB);
+        var NEUTRO = 5, simMatiz;
+        if (A.C < NEUTRO && B.C < NEUTRO) simMatiz = 1 - Math.abs(A.L - B.L) / 100;
+        else if (A.C < NEUTRO || B.C < NEUTRO) simMatiz = 0.3;
+        else {
+            var dh = Math.abs(A.h - B.h);
+            simMatiz = 1 - Math.min(dh, 360 - dh) / 180;
+        }
+        var simDe = Math.max(0, 1 - colorDist(rgbA, rgbB) / 50);
+        return 0.6 * simMatiz + 0.4 * simDe;
     }
 
     function performLocalSearch() {
-        var produtos = window.TechWear ? window.TechWear.getProdutos() : [];
-
-        // Aplicar filtros de esporte e categoria
+        var produtos = getProdutosFiltrados();
         var esporteVal = filtroEsporte.value;
         var categoriaVal = filtroCategoria.value;
-        if (esporteVal) {
-            produtos = produtos.filter(function (p) { return p.esporte === esporteVal; });
-        }
-        if (categoriaVal) {
-            produtos = produtos.filter(function (p) { return p.categoria === categoriaVal; });
-        }
 
         if (!produtos.length) {
             noResultsState.style.display = '';
@@ -413,10 +542,9 @@
             var filterText = [];
             if (esporteVal) filterText.push(esporteVal.charAt(0).toUpperCase() + esporteVal.slice(1));
             if (categoriaVal) filterText.push(categoriaVal.charAt(0).toUpperCase() + categoriaVal.slice(1));
-            showDetection(hex, filterText.length ? filterText.join(' · ') : 'Todos');
+            showDetection(hex, filterText.length ? filterText.join(' · ') : 'Todos', 'Filtros aplicados · modo offline (só cor)');
 
             // === PASSO 5: Comparar com hex_color cadastrado no produto ===
-            var maxDist = 441.67;
 
             var scored = produtos.map(function (p) {
                 // Usar hex_color cadastrado pelo admin, com fallback para mapa de nomes
@@ -424,8 +552,7 @@
                 if (typeof prodHex !== 'string') prodHex = '#808080';
                 var pc = hexToRgb(prodHex);
 
-                var dist = colorDist(detectedRGB, pc);
-                var score = 1 - (dist / maxDist);
+                var score = colorSimilarity(detectedRGB, pc);
 
                 return {
                     id: p.id,
@@ -474,10 +601,11 @@
     // ========================================
     // Exibição de resultados
     // ========================================
-    function showDetection(hex, category) {
+    function showDetection(hex, category, label) {
         colorSwatch.style.backgroundColor = hex;
         colorHex.textContent = hex;
         detectedCategory.textContent = category;
+        if (detectedCategoryLabel && label) detectedCategoryLabel.textContent = label;
         detectionCard.style.display = '';
     }
 
@@ -502,7 +630,7 @@
             var scorePercent = Math.round(p.score * 100);
 
             var imageHtml;
-            if (p.image_url && p.image_url.length > 50) {
+            if (p.image_url) {
                 imageHtml = '<img src="' + sanitize(p.image_url) + '" alt="' + sanitize(p.name) + '">';
             } else {
                 imageHtml = '<span class="material-symbols-outlined no-image">checkroom</span>';
@@ -566,7 +694,7 @@
             card.setAttribute('data-id', p.id);
 
             var imageHtml;
-            if (p.imagem && p.imagem.length > 50) {
+            if (p.imagem) {
                 imageHtml = '<img src="' + sanitize(p.imagem) + '" alt="' + sanitize(p.nome) + '">';
             } else {
                 imageHtml = '<span class="material-symbols-outlined no-image">checkroom</span>';
@@ -609,7 +737,7 @@
         currentQty = 1;
         qtyValue.textContent = '1';
 
-        if (produto.imagem && produto.imagem.length > 50) {
+        if (produto.imagem) {
             modalImg.src = produto.imagem;
             modalImg.style.display = '';
         } else {
@@ -663,6 +791,12 @@
 
     if (qtyPlus) {
         qtyPlus.addEventListener('click', function () {
+            var disponivel = currentModalProduct && window.TechWear
+                ? window.TechWear.getEstoqueDisponivel(currentModalProduct.id) : Infinity;
+            if (currentQty >= disponivel) {
+                showToast(disponivel > 0 ? 'Apenas ' + disponivel + ' unidade(s) disponível(is).' : 'Produto sem estoque.');
+                return;
+            }
             currentQty++;
             qtyValue.textContent = currentQty;
         });
@@ -676,7 +810,8 @@
                 return;
             }
             if (window.TechWear) {
-                window.TechWear.adicionarAoCarrinho(currentModalProduct.id, currentModalSize, currentQty);
+                var res = window.TechWear.adicionarAoCarrinho(currentModalProduct.id, currentModalSize, currentQty);
+                if (res && res.erro) { showToast(res.erro); return; }
             }
             showToast('Adicionado ao carrinho!');
             productModal.style.display = 'none';

@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Relatório — Matemáticas Aplicadas — Tech Wear</title>
+    <link rel="icon" type="image/x-icon" href="favicon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@400;600;700&family=Source+Code+Pro:wght@400;600&display=swap" rel="stylesheet">
     <style>
@@ -340,7 +341,7 @@
             <div class="f-linha">PIS    = V<sub>motor</sub> × 0,0165</div>
             <div class="f-linha">COFINS = V<sub>motor</sub> × 0,0760</div>
             <div class="f-linha">ICMS   = varia por UF de destino (0% a 17%)</div>
-            <div class="f-linha f-destaque">F<sub>imp</sub> = F<sub>ANTT</sub> + PIS + COFINS + ICMS</div>
+            <div class="f-linha f-destaque">F<sub>imp</sub> = V<sub>motor</sub> + PIS + COFINS + ICMS</div>
         </div>
 
         <h3>Etapa 3 — Pedágio</h3>
@@ -389,9 +390,9 @@
         <div class="nota">
             <strong>Exemplo numérico:</strong> Pedido para Curitiba/PR (D = 408 km).
             F<sub>ANTT</sub> = 408 × 3,8866 = R$ 1.585,73 | V<sub>motor</sub> = R$ 792,87
-            | PIS = R$ 13,08 | COFINS = R$ 60,26 | Pedágio = ⌊408/100⌋ × 20 = 4 × 20 = R$ 80,00
-            | F<sub>final</sub> = (1.585,73 + 13,08 + 60,26) × 1,3015 + 80 + 436,39 = <strong>R$ 2.793,52</strong>
-            | Para pedido de 0,02 m³: F<sub>pedido</sub> = 2.793,52 × (0,02/2,64) = <strong>R$ 21,16</strong>
+            | PIS = R$ 13,08 | COFINS = R$ 60,26 | ICMS (SP → PR) = R$ 0,00 | Pedágio = ⌊408/100⌋ × 20 = 4 × 20 = R$ 80,00
+            | F<sub>final</sub> = (792,87 + 13,08 + 60,26) × 1,3015 + 80 + 436,39 = <strong>R$ 1.643,76</strong>
+            | Para pedido de 0,02 m³: F<sub>pedido</sub> = 1.643,76 × (0,02/2,64) = <strong>R$ 12,45</strong>
         </div>
     </div>
 
@@ -601,6 +602,41 @@
             d = √[(71−75)² + (79−83)² + (28−32)²] = √[16+16+16] = √48 ≈ 6,93.
             similaridade = 1 − 6,93/441,67 = <strong>98,4%</strong> → produto exibido como recomendação #1.
         </div>
+
+        <h2>4.7 Refinamento: Matiz (LCh) e Diferença Perceptual CIEDE2000</h2>
+        <p>
+            O cubo RGB não é <strong>perceptualmente uniforme</strong>: distâncias iguais no RGB não correspondem a
+            diferenças iguais percebidas pelo olho. Nos testes com fotos reais, uma camiseta rosa-clara ficava mais
+            "perto" de um moletom branco do que de um moletom rosa. Por isso a similaridade de cor passou a ser
+            calculada no espaço <strong>CIELAB / LCh</strong>, onde cada cor tem luminosidade (L), croma ou
+            saturação (C) e matiz, o "tom", em graus (h):
+        </p>
+        <div class="formula-box">
+            <div class="f-linha f-destaque">sim<sub>cor</sub> = 0,6 × sim<sub>matiz</sub> + 0,4 × (1 − ΔE<sub>2000</sub> / 50)</div>
+            <div class="f-linha f-comentario">sim<sub>matiz</sub> = 1 − Δh / 180°,  com Δh = menor ângulo entre os matizes no círculo cromático</div>
+            <div class="f-linha f-comentario">cores neutras (C &lt; 5: branco, cinza, preto) não têm matiz: neutra × neutra compara L; neutra × colorida = 0,3</div>
+            <div class="f-linha f-comentario">ΔE<sub>2000</sub>: fórmula CIEDE2000 (CIE, 2001), padrão da indústria para diferença de cor; ΔE ≥ 50 → similaridade 0</div>
+        </div>
+        <p>
+            O matiz responde "que cor é" (rosa, azul, verde), como as pessoas nomeiam as cores. O ΔE<sub>2000</sub>
+            refina por claridade e saturação. O score final da WearIA continua
+            <strong>score = 0,7 × sim<sub>CLIP</sub> + 0,3 × sim<sub>cor</sub></strong>.
+        </p>
+
+        <table>
+            <thead><tr><th>Foto: camiseta rosa-clara #ead3dd (L 86,7 · C 9,9 · h 348°)</th><th>d RGB</th><th>Sim. RGB (4.5)</th><th>ΔE<sub>2000</sub></th><th>Sim. matiz</th><th>sim<sub>cor</sub> (4.7)</th></tr></thead>
+            <tbody>
+                <tr><td>Moletom Rosa #f7b8e0 (C 30,9 · h 339°)</td><td>30,1</td><td>93,2%</td><td>12,7</td><td>0,949</td><td><strong>86,8%</strong></td></tr>
+                <tr><td>Moletom Branco #e6e6e6 (neutro)</td><td>21,4</td><td><strong>95,2%</strong></td><td>11,4</td><td>0,300</td><td>48,9%</td></tr>
+                <tr><td>Moletom Bege #cdb3a5 (C 12,7 · h 56°)</td><td>70,7</td><td>84,0%</td><td>13,5</td><td>0,622</td><td>66,5%</td></tr>
+            </tbody>
+        </table>
+        <p>
+            Pela distância RGB, o moletom <em>branco</em> seria o mais parecido (95,2%). Com o matiz, o moletom
+            <em>rosa</em> passa à frente (86,8% contra 48,9%), que é o resultado esperado por quem envia a foto.
+            Além disso, a pessoa na foto é recortada pela silhueta do modelo de segmentação YOLOv8-seg, que
+            substitui a subtração de fundo por limiar da seção 4.6.
+        </p>
     </div>
 
 

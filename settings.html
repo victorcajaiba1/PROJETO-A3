@@ -159,26 +159,35 @@ https://templatemo.com/tm-609-crypto-vault
             setTimeout(function() { t.style.opacity='0'; t.style.transform='translateY(20px)'; setTimeout(function() { t.remove(); }, 300); }, 2500);
         }
 
-        var PERF_KEY = 'tw_perfil';
+        // Perfil salvo por usuário (a chave global antiga 'tw_perfil' é ignorada)
+        function getPerfKey(sessao) {
+            return sessao ? 'tw_perfil_' + sessao.id : null;
+        }
 
         function carregarPerfil() {
             var sessao = TechWear.getUsuarioLogado();
-            var perfil = JSON.parse(localStorage.getItem(PERF_KEY) || '{}');
-            var nome = perfil.nome || (sessao && sessao.nome) || '';
+            var chave = getPerfKey(sessao);
+            var perfil = chave ? JSON.parse(localStorage.getItem(chave) || '{}') : {};
+            var nome = (sessao && sessao.nome) || perfil.nome || '';
             var partes = nome.split(' ');
             var primeiro = partes[0] || '';
             var sobrenome = partes.slice(1).join(' ') || '';
 
             document.getElementById('perfNome').value = primeiro;
             document.getElementById('perfSobrenome').value = sobrenome;
-            document.getElementById('perfEmail').value = perfil.email || (sessao && sessao.email) || '';
+            var emailInput = document.getElementById('perfEmail');
+            emailInput.value = (sessao && sessao.email) || perfil.email || '';
+            // Superuser (id 0) tem credenciais fixas: e-mail não pode ser alterado
+            emailInput.readOnly = !!sessao && sessao.id === 0;
+            emailInput.style.opacity = emailInput.readOnly ? '0.6' : '';
+            emailInput.style.cursor = emailInput.readOnly ? 'not-allowed' : '';
             document.getElementById('perfTelefone').value = perfil.telefone || '';
             document.getElementById('perfBio').value = perfil.bio || '';
 
             var nomeCompleto = (primeiro + ' ' + sobrenome).trim() || 'Usuário';
             var iniciais = (primeiro[0] || '') + (sobrenome[0] || '');
             document.getElementById('profileNomeDisplay').textContent = nomeCompleto;
-            document.getElementById('profileEmailDisplay').textContent = perfil.email || (sessao && sessao.email) || '';
+            document.getElementById('profileEmailDisplay').textContent = emailInput.value;
             document.getElementById('profileAvatar').textContent = iniciais.toUpperCase() || 'U';
         }
 
@@ -186,20 +195,39 @@ https://templatemo.com/tm-609-crypto-vault
             var nome = document.getElementById('perfNome').value.trim();
             var sobrenome = document.getElementById('perfSobrenome').value.trim();
             var email = document.getElementById('perfEmail').value.trim();
+            var sessao = TechWear.getUsuarioLogado();
+            if (!sessao) { showToast('Faça login para editar o perfil'); return; }
             if (!nome) { showToast('Preencha o nome'); return; }
+            if (sessao.id === 0) email = sessao.email;
+            if (!email) { showToast('Preencha o e-mail'); return; }
+
+            // Atualiza o cadastro em tw_usuarios (o superuser id 0 não fica lá)
+            if (sessao.id !== 0) {
+                var usuarios = JSON.parse(localStorage.getItem('tw_usuarios') || '[]');
+                var emailEmUso = email === 'admin@techwear.com' || usuarios.some(function(u) {
+                    return u.email === email && u.id !== sessao.id;
+                });
+                if (emailEmUso) { showToast('E-mail já cadastrado'); return; }
+                for (var i = 0; i < usuarios.length; i++) {
+                    if (usuarios[i].id === sessao.id) {
+                        usuarios[i].nome = (nome + ' ' + sobrenome).trim();
+                        usuarios[i].email = email;
+                        break;
+                    }
+                }
+                localStorage.setItem('tw_usuarios', JSON.stringify(usuarios));
+            }
+
             var perfil = {
                 nome: (nome + ' ' + sobrenome).trim(),
                 email: email,
                 telefone: document.getElementById('perfTelefone').value.trim(),
                 bio: document.getElementById('perfBio').value.trim()
             };
-            localStorage.setItem(PERF_KEY, JSON.stringify(perfil));
-            var sessao = TechWear.getUsuarioLogado();
-            if (sessao) {
-                sessao.nome = perfil.nome;
-                sessao.email = perfil.email;
-                localStorage.setItem('tw_sessao', JSON.stringify(sessao));
-            }
+            localStorage.setItem(getPerfKey(sessao), JSON.stringify(perfil));
+            sessao.nome = perfil.nome;
+            sessao.email = perfil.email;
+            localStorage.setItem('tw_sessao', JSON.stringify(sessao));
             carregarPerfil();
             showToast('Perfil atualizado!');
         });

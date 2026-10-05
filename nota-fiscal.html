@@ -569,9 +569,32 @@
             return 'R$ ' + (v||0).toFixed(2).replace('.', ',');
         }
 
+        /* ── Pedidos visíveis: só os do usuário logado (admin vê todos; id 0 = superuser, por isso ===) ── */
+        function getPedidosVisiveis() {
+            var usuario = TechWear.getUsuarioLogado();
+            if (!usuario) return [];
+            var pedidos = TechWear.getPedidos();
+            if (usuario.perfil === 'admin') return pedidos;
+            return pedidos.filter(function(p) { return p.usuarioId === usuario.id; });
+        }
+
+        /* ── Valores do pedido: produtos, frete, desconto, juros e total final ── */
+        function valoresPedido(ped) {
+            var end      = ped.endereco || {};
+            var produtos = typeof ped.subtotal === 'number' ? ped.subtotal
+                         : (ped.itens || []).reduce(function(a,i){ return a + i.subtotal; }, 0);
+            var frete    = end.frete || 0;
+            var desconto = end.desconto || 0;
+            var semJuros = Math.round((produtos + frete - desconto) * 100) / 100;
+            // Pedidos antigos (sem subtotal) guardavam em total só os produtos
+            var total    = typeof ped.subtotal === 'number' ? ped.total : semJuros;
+            var juros    = Math.round((total - semJuros) * 100) / 100;
+            return { produtos: produtos, frete: frete, desconto: desconto, juros: juros > 0 ? juros : 0, total: total };
+        }
+
         /* ── Preenche selector de pedidos ── */
         function popularSelector() {
-            var pedidos = TechWear.getPedidos();
+            var pedidos = getPedidosVisiveis();
             var sel = document.getElementById('pedidoSelector');
             sel.innerHTML = '<option value="">Selecione um pedido...</option>';
             if (pedidos.length === 0) {
@@ -583,14 +606,14 @@
                 var dt  = new Date(p.data).toLocaleDateString('pt-BR');
                 var opt = document.createElement('option');
                 opt.value = p.id;
-                opt.textContent = id + ' — ' + dt + ' — ' + fmtR(p.total);
+                opt.textContent = id + ' — ' + dt + ' — ' + fmtR(valoresPedido(p).total);
                 sel.appendChild(opt);
             });
-            // Pré-seleciona o pedido mais recente
-            if (pedidos.length > 0) {
-                sel.value = pedidos[0].id;
-                carregarNota();
-            }
+            // Pré-seleciona o pedido da URL (?id=) ou, se não houver, o mais recente
+            var idUrl = parseInt(new URLSearchParams(window.location.search).get('id'), 10);
+            var doUrl = pedidos.filter(function(p){ return p.id === idUrl; })[0];
+            sel.value = doUrl ? doUrl.id : pedidos[0].id;
+            carregarNota();
         }
 
         /* ── Renderiza nota ── */
@@ -601,7 +624,7 @@
                 document.getElementById('notaDoc').innerHTML = '<div class="nota-empty" id="notaEmpty"><span class="material-symbols-outlined">receipt_long</span><h3 style="color:#aaa;font-size:16px;">Nenhum pedido selecionado</h3><p style="font-size:13px;margin-top:6px;">Selecione um pedido acima para visualizar a nota fiscal.</p></div>';
                 return;
             }
-            var pedidos = TechWear.getPedidos();
+            var pedidos = getPedidosVisiveis();
             var pedido  = pedidos.find(function(p){ return p.id === id; });
             if (!pedido) return;
             renderNota(pedido);
@@ -618,10 +641,12 @@
             var cfopVal = cfop(ufDest);
 
             /* Cálculo de tributos (fictícios mas proporcionais) */
-            var subtotal = ped.itens.reduce(function(a,i){ return a + i.subtotal; }, 0);
-            var frete    = end.frete || 0;
-            var desconto = end.desconto || 0;
-            var total    = ped.total;
+            var valores  = valoresPedido(ped);
+            var subtotal = valores.produtos;
+            var frete    = valores.frete;
+            var desconto = valores.desconto;
+            var juros    = valores.juros;
+            var total    = valores.total;
             var baseCalc = subtotal - desconto;
             var icmsAliq = ufDest === 'SP' ? 0.12 : 0.12;
             var icmsVal  = Math.round(baseCalc * icmsAliq * 100) / 100;
@@ -792,6 +817,7 @@
                         '<div class="nf-total-item"><span class="nf-tot-label">Vl. Produtos</span><span class="nf-tot-val">' + fmtR(subtotal) + '</span></div>' +
                         (frete > 0 ? '<div class="nf-total-item"><span class="nf-tot-label">Vl. Frete</span><span class="nf-tot-val">' + fmtR(frete) + '</span></div>' : '') +
                         (desconto > 0 ? '<div class="nf-total-item"><span class="nf-tot-label">Desconto</span><span class="nf-tot-val" style="color:green;">-' + fmtR(desconto) + '</span></div>' : '') +
+                        (juros > 0 ? '<div class="nf-total-item"><span class="nf-tot-label">Juros Parcelamento</span><span class="nf-tot-val">' + fmtR(juros) + '</span></div>' : '') +
                         '<div class="nf-total-item"><span class="nf-tot-label">Vl. Tributos</span><span class="nf-tot-val">' + fmtR(icmsVal+pisVal+cofinsVal) + '</span></div>' +
                         '<div class="nf-total-item grand"><span>TOTAL DA NF-e</span><span class="nf-tot-val">' + fmtR(total) + '</span></div>' +
                     '</div>' +

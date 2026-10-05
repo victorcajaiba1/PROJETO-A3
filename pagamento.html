@@ -79,18 +79,18 @@
         /* ── Payment layout ── */
         .payment-layout {
             display: grid;
-            grid-template-columns: 1fr 380px;
+            grid-template-columns: minmax(0, 1fr) 380px;
             gap: 28px;
             align-items: start;
         }
         @media (max-width: 1100px) {
-            .payment-layout { grid-template-columns: 1fr; }
+            .payment-layout { grid-template-columns: minmax(0, 1fr); }
         }
 
         /* ── Payment method tabs ── */
         .pay-tabs-wrapper {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(4, minmax(0, 1fr));
             gap: 10px;
             margin-bottom: 28px;
         }
@@ -270,7 +270,7 @@
         /* ── Card form ── */
         .card-form-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
             gap: 16px;
         }
         .card-form-grid .full { grid-column: 1 / -1; }
@@ -614,7 +614,8 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 20px;
+            flex-wrap: wrap;
+            gap: 12px 20px;
             padding: 18px;
             background: var(--bg-card);
             border: 1px solid var(--border);
@@ -775,8 +776,8 @@
 
         /* Mobile */
         @media (max-width: 768px) {
-            .pay-tabs-wrapper { grid-template-columns: repeat(2, 1fr); }
-            .card-form-grid { grid-template-columns: 1fr; }
+            .pay-tabs-wrapper { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .card-form-grid { grid-template-columns: minmax(0, 1fr); }
             .card-form-grid .full { grid-column: 1; }
             .checkout-steps { padding: 14px 18px; }
             .step-label { display: none; }
@@ -1351,6 +1352,20 @@
             document.getElementById('payBtnLabel').textContent = label;
         }
 
+        /* Valor final cobrado: produtos + frete − desconto (+ juros acima de 6x no crédito) */
+        function getTotalFinal() {
+            var subtotal = TechWear.getTotalCarrinho();
+            var freteVal = entrega ? (parseFloat(entrega.freteVal) || 0) : 0;
+            var descontoVal = desconto > 0 ? Math.round(subtotal * desconto * 100) / 100 : 0;
+            var total = subtotal + freteVal - descontoVal;
+            if (currentMethod === 'credito') {
+                var sel = document.getElementById('cardInstallments');
+                var n = sel && sel.value ? parseInt(sel.value) : 1;
+                if (n > 6) total = calcParcela(total, n) * n;
+            }
+            return Math.round(total * 100) / 100;
+        }
+
         /* ── Installments ── */
         function calcParcela(total, n) {
             if (n <= 6) return total / n;
@@ -1728,6 +1743,8 @@
             var freteVal  = entrega ? (parseFloat(entrega.freteVal) || 0) : 0;
             var descontoVal = desconto > 0 ? Math.round(subtotal * desconto * 100) / 100 : 0;
 
+            var totalFinal = getTotalFinal();
+
             var result = TechWear.criarPedido({
                 nome:        entrega.nome,
                 cep:         entrega.cep,
@@ -1741,7 +1758,7 @@
                 metodoPagamento: currentMethod === 'credito' ? 'Cartão de Crédito' :
                                  currentMethod === 'debito'  ? 'Cartão de Débito'  :
                                  currentMethod === 'pix'     ? 'PIX'               : 'Boleto Bancário'
-            });
+            }, { total: totalFinal });
 
             if (result.sucesso) {
                 /* Clear pending checkout */
@@ -1756,6 +1773,9 @@
                 showToast(result.erro || 'Erro ao processar pagamento.', true);
                 var btn = document.getElementById('payBtn');
                 btn.disabled = false;
+                /* Restaura o conteúdo trocado por "Processando..." */
+                btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:20px;">lock</span>' +
+                                '<span id="payBtnLabel"></span>';
                 updatePayBtnLabel();
             }
         }
@@ -1824,9 +1844,6 @@
                 pix:     'PIX',
                 boleto:  'Boleto Bancário'
             }[currentMethod] || currentMethod;
-
-            var subtotal  = TechWear.getTotalCarrinho() + (entrega ? (parseFloat(entrega.freteVal)||0) : 0) -
-                            (desconto > 0 ? Math.round(TechWear.getTotalCarrinho() * desconto * 100)/100 : 0);
 
             document.getElementById('successDetails').innerHTML =
                 'Pagamento via <strong>' + methodLabel + '</strong><br>' +

@@ -124,6 +124,8 @@
         }
 
         /* ===== TABELA DE ESTOQUE ===== */
+        /* Em telas estreitas a tabela rola na horizontal em vez de vazar da página */
+        #stockTableWrap { overflow-x: auto; }
         .stock-table {
             width: 100%;
             border-collapse: collapse;
@@ -289,7 +291,7 @@
                     </div>
                 </div>
                 <div style="display:flex;gap:10px;">
-                    <button id="btnSeedDemo" onclick="seedDemoData()" style="background:var(--gain);color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;">Gerar demonstração</button>
+                    <button id="btnSeedDemoBanner" onclick="seedDemoData()" style="background:var(--gain);color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;">Gerar demonstração</button>
                     <button onclick="document.getElementById('demoBanner').style.display='none'" style="background:transparent;color:var(--text-secondary);border:1px solid var(--border);border-radius:8px;padding:9px 14px;font-size:13px;font-family:inherit;cursor:pointer;">Dispensar</button>
                 </div>
             </div>
@@ -309,7 +311,7 @@
                     <button class="period-tab" data-months="0">Tudo</button>
                 </div>
                 <div style="display:flex;gap:8px;">
-                    <button id="btnSeedDemo" onclick="seedDemoData()" style="display:flex;align-items:center;gap:6px;background:rgba(107,142,107,0.15);color:var(--gain);border:1px solid var(--gain);border-radius:8px;padding:7px 14px;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;">
+                    <button id="btnSeedDemoToolbar" onclick="seedDemoData()" style="display:flex;align-items:center;gap:6px;background:rgba(107,142,107,0.15);color:var(--gain);border:1px solid var(--gain);border-radius:8px;padding:7px 14px;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;">
                         <span class="material-symbols-outlined" style="font-size:15px;">science</span>
                         Gerar demonstração
                     </button>
@@ -469,6 +471,25 @@
             return Object.keys(mapa).sort();
         }
 
+        /* Chave "AAAA-MM" de uma data */
+        function chaveMes(d) {
+            return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+        }
+
+        /* Lista contínua de meses entre duas chaves (inclusive), sem buracos */
+        function intervaloMeses(inicio, fim) {
+            var lista = [];
+            var partes = inicio.split('-');
+            var d = new Date(parseInt(partes[0]), parseInt(partes[1]) - 1, 1);
+            var k = chaveMes(d);
+            while (k <= fim) {
+                lista.push(k);
+                d.setMonth(d.getMonth() + 1);
+                k = chaveMes(d);
+            }
+            return lista;
+        }
+
         function labelMes(key) {
             var parts = key.split('-');
             var nomes = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
@@ -493,9 +514,14 @@
             return { m: m, b: b };
         }
 
-        function previsaoProximo(valores) {
+        /* ŷ = m·x + b para um x qualquer */
+        function previsaoEm(valores, x) {
             var r = regressaoLinear(valores);
-            return Math.max(0, r.m * valores.length + r.b);
+            return Math.max(0, r.m * x + r.b);
+        }
+
+        function previsaoProximo(valores) {
+            return previsaoEm(valores, valores.length);
         }
 
         /* R² para confiança */
@@ -520,6 +546,22 @@
 
         function destroyChart(id) {
             if (chartInstances[id]) { chartInstances[id].destroy(); delete chartInstances[id]; }
+        }
+
+        /* Mostra/esconde o aviso "sem dados" de um gráfico sem remover o <canvas>
+           (apagar o canvas quebrava todos os renders seguintes) */
+        function mostrarVazio(canvasId, vazio, icone, texto) {
+            var canvas = document.getElementById(canvasId);
+            var aviso  = document.getElementById(canvasId + 'Vazio');
+            if (!aviso) {
+                aviso = document.createElement('div');
+                aviso.id = canvasId + 'Vazio';
+                aviso.className = 'empty-state';
+                canvas.parentElement.appendChild(aviso);
+            }
+            aviso.innerHTML = '<span class="material-symbols-outlined">' + icone + '</span>' + texto;
+            aviso.style.display  = vazio ? '' : 'none';
+            canvas.style.display = vazio ? 'none' : '';
         }
 
         /* ─────────────────────────────────────────
@@ -580,10 +622,9 @@
             var mapa  = agruparPorMes(pedidos);
             var meses = mesesOrdenados(mapa);
 
-            if (meses.length === 0) {
-                document.getElementById('chartReceita').parentElement.innerHTML = '<div class="empty-state"><span class="material-symbols-outlined">bar_chart</span>Sem pedidos no período</div>';
-                return;
-            }
+            var vazio = meses.length === 0;
+            mostrarVazio('chartReceita', vazio, 'bar_chart', 'Sem pedidos no período');
+            if (vazio) return;
 
             var receitas = meses.map(function(m) { return mapa[m].receita; });
             var ctx = document.getElementById('chartReceita').getContext('2d');
@@ -632,6 +673,7 @@
             });
 
             var labels = Object.keys(mapa);
+            mostrarVazio('chartCategorias', labels.length === 0, 'donut_large', 'Sem vendas no período');
             if (labels.length === 0) return;
 
             var ctx = document.getElementById('chartCategorias').getContext('2d');
@@ -671,6 +713,7 @@
             });
 
             var sorted = Object.entries(contagem).sort(function(a, b) { return b[1] - a[1]; }).slice(0, 5);
+            mostrarVazio('chartTopProdutos', sorted.length === 0, 'checkroom', 'Sem vendas no período');
             if (sorted.length === 0) return;
 
             var ctx = document.getElementById('chartTopProdutos').getContext('2d');
@@ -708,6 +751,7 @@
             destroyChart('ticket');
             var mapa  = agruparPorMes(pedidos);
             var meses = mesesOrdenados(mapa);
+            mostrarVazio('chartTicket', meses.length === 0, 'show_chart', 'Sem pedidos no período');
             if (meses.length === 0) return;
 
             var tickets = meses.map(function(m) {
@@ -751,36 +795,60 @@
             destroyChart('forecast');
 
             var mapa  = agruparPorMes(allPedidos);
-            var meses = mesesOrdenados(mapa);
+            var mesesComDados = mesesOrdenados(mapa);
+            var chaveAtual    = chaveMes(new Date());
 
-            if (meses.length === 0) {
+            /* Série contínua do 1º mês com dados até o mês atual:
+               meses sem pedidos entram com 0 para que x = 0,1,2… seja tempo real */
+            var meses = mesesComDados.length > 0 ? intervaloMeses(mesesComDados[0], chaveAtual) : [];
+
+            var vazio = meses.length === 0;
+            mostrarVazio('chartForecast', vazio, 'trending_up', 'Sem histórico para gerar previsão');
+            if (vazio) {
                 document.getElementById('forecastKpis').innerHTML =
                     '<div class="empty-state" style="grid-column:1/-1"><span class="material-symbols-outlined">trending_up</span>Sem histórico para gerar previsão</div>';
                 return;
             }
 
-            var receitas = meses.map(function(m) { return mapa[m].receita; });
-            var pedidosMes = meses.map(function(m) { return mapa[m].pedidos; });
+            var receitas   = meses.map(function(m) { return mapa[m] ? mapa[m].receita : 0; });
+            var pedidosMes = meses.map(function(m) { return mapa[m] ? mapa[m].pedidos : 0; });
 
-            var prevReceita = previsaoProximo(receitas);
-            var prevPedidos = Math.round(previsaoProximo(pedidosMes));
+            /* O mês atual ainda não terminou: com ≥ 2 meses completos ele fica
+               fora do ajuste para não puxar a tendência para baixo */
+            var nCompletos  = meses.length - 1;
+            var excluiAtual = nCompletos >= 2;
+            var recAjuste   = excluiAtual ? receitas.slice(0, nCompletos)   : receitas;
+            var pedAjuste   = excluiAtual ? pedidosMes.slice(0, nCompletos) : pedidosMes;
+            /* x do próximo mês: completos = 0..n-1, atual = n, próximo = n+1 */
+            var xProx = excluiAtual ? nCompletos + 1 : receitas.length;
+
+            var prevReceita = previsaoEm(recAjuste, xProx);
+            var prevPedidos = Math.round(previsaoEm(pedAjuste, xProx));
             var prevTicket  = prevPedidos > 0 ? prevReceita / prevPedidos : 0;
-            var confianca   = rQuadrado(receitas);
+            var confianca   = rQuadrado(recAjuste);
 
-            /* Labels + linha projetada */
+            /* Labels + linha projetada (rótulo = mês seguinte ao atual) */
             var proxMesLabel = (function() {
-                var d = new Date();
-                d.setMonth(d.getMonth() + 1);
+                var hoje = new Date();
+                var d = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 1);
                 var nomes = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
                 return nomes[d.getMonth()] + '/' + String(d.getFullYear()).slice(2);
             })();
 
-            var labels = meses.map(labelMes).concat([proxMesLabel]);
+            var labels = meses.map(function(m) {
+                return labelMes(m) + (excluiAtual && m === chaveAtual ? ' (parcial)' : '');
+            }).concat([proxMesLabel]);
 
             /* Dataset histórico */
             var dadosHist = receitas.map(function(v) { return v; }).concat([null]);
-            /* Dataset projetado: só o último ponto real e o próximo */
-            var dadosPrev = new Array(receitas.length - 1).fill(null).concat([receitas[receitas.length - 1], prevReceita]);
+            /* Dataset projetado: último ponto usado no ajuste → (mês atual ajustado) → próximo */
+            var dadosPrev;
+            if (excluiAtual) {
+                dadosPrev = new Array(nCompletos - 1).fill(null)
+                    .concat([receitas[nCompletos - 1], previsaoEm(recAjuste, nCompletos), prevReceita]);
+            } else {
+                dadosPrev = new Array(receitas.length - 1).fill(null).concat([receitas[receitas.length - 1], prevReceita]);
+            }
 
             var ctx = document.getElementById('chartForecast').getContext('2d');
             var gradHist = ctx.createLinearGradient(0, 0, 0, 260);
@@ -828,8 +896,10 @@
             });
 
             /* KPIs da previsão */
-            var crescimento = receitas.length >= 2
-                ? ((prevReceita - receitas[receitas.length - 1]) / receitas[receitas.length - 1] * 100)
+            /* Base de comparação: último mês completo (ou o atual, se não houver 2 completos) */
+            var baseCresc   = recAjuste[recAjuste.length - 1];
+            var crescimento = recAjuste.length >= 2 && baseCresc > 0
+                ? ((prevReceita - baseCresc) / baseCresc * 100)
                 : 0;
             var confPct = Math.round(confianca * 100);
             var confTxt = confPct >= 75 ? 'Alta' : confPct >= 40 ? 'Média' : 'Baixa';
@@ -839,7 +909,7 @@
                 '<div class="forecast-kpi">' +
                 '  <div class="forecast-kpi-label">Receita Prevista</div>' +
                 '  <div class="forecast-kpi-value">' + fmtK(prevReceita) + '</div>' +
-                '  <div class="forecast-kpi-note">' + (crescimento >= 0 ? '▲' : '▼') + ' ' + Math.abs(crescimento).toFixed(1) + '% vs mês atual</div>' +
+                '  <div class="forecast-kpi-note">' + (crescimento >= 0 ? '▲' : '▼') + ' ' + Math.abs(crescimento).toFixed(1) + '% vs ' + (excluiAtual ? 'último mês completo' : 'mês atual') + '</div>' +
                 '</div>' +
                 '<div class="forecast-kpi">' +
                 '  <div class="forecast-kpi-label">Pedidos Previstos</div>' +
@@ -1022,6 +1092,9 @@
                 });
             }
 
+            /* subtotal = soma dos itens (mesmo formato dos pedidos reais) */
+            var subtotal = Math.round(total * 100) / 100;
+
             /* aplica pequena variação aleatória para não parecer mecânico */
             var variacao = (Math.random() * 0.3 - 0.1) * fatorCrescimento;
             total = Math.round(total * (1 + variacao) * 100) / 100;
@@ -1032,6 +1105,7 @@
                 id:          dataBase.getTime() + rnd(1, 9999),
                 usuarioId:   1,
                 itens:       itens,
+                subtotal:    subtotal,
                 total:       total,
                 endereco:    end,
                 status:      'Confirmado',
@@ -1041,9 +1115,15 @@
         }
 
         window.seedDemoData = function() {
-            var btn = document.getElementById('btnSeedDemo');
-            btn.disabled = true;
-            btn.textContent = 'Gerando...';
+            /* Evita duplicar a demonstração se já foi gerada */
+            if (localStorage.getItem(SEED_KEY) === '1') { checkBanners(); return; }
+
+            /* Desabilita os dois botões (banner + barra) guardando o conteúdo original */
+            var botoes = ['btnSeedDemoBanner', 'btnSeedDemoToolbar'].map(function(id) {
+                return document.getElementById(id);
+            }).filter(Boolean);
+            var htmlOriginal = botoes.map(function(b) { return b.innerHTML; });
+            botoes.forEach(function(b) { b.disabled = true; b.textContent = 'Gerando...'; });
 
             var pedidos = TechWear.getPedidos();
 
@@ -1073,8 +1153,13 @@
 
             /* Recarrega dados e re-renderiza */
             allPedidos = TechWear.getPedidos();
-            renderTudo();
-            checkBanners();
+            try {
+                renderTudo();
+            } finally {
+                /* Restaura os botões mesmo se algum gráfico falhar */
+                botoes.forEach(function(b, i) { b.innerHTML = htmlOriginal[i]; b.disabled = false; });
+                checkBanners();
+            }
         };
 
         window.clearDemoData = function() {
@@ -1091,11 +1176,13 @@
             var temPedidos = allPedidos.length > 0;
             var demoBanner  = document.getElementById('demoBanner');
             var clearBanner = document.getElementById('clearBanner');
-            var btnSeed     = document.getElementById('btnSeedDemo');
+            var btnSeedBanner  = document.getElementById('btnSeedDemoBanner');
+            var btnSeedToolbar = document.getElementById('btnSeedDemoToolbar');
             var btnClear    = document.getElementById('btnClearDemo');
             demoBanner.style.display  = (!temPedidos && !temDemo) ? 'flex' : 'none';
             clearBanner.style.display = temDemo ? 'flex' : 'none';
-            if (btnSeed)  btnSeed.style.display  = temDemo ? 'none'  : 'flex';
+            if (btnSeedBanner)  btnSeedBanner.style.display  = temDemo ? 'none' : '';
+            if (btnSeedToolbar) btnSeedToolbar.style.display = temDemo ? 'none' : 'flex';
             if (btnClear) btnClear.style.display = temDemo ? 'flex'  : 'none';
         }
 

@@ -68,6 +68,17 @@ body {
     min-height: 100vh;
 }
 
+/* Pinta a coluna da sidebar em toda a altura da página (desktop),
+   garantindo o fundo mesmo em páginas longas */
+@media (min-width: 1025px) {
+    .dashboard {
+        background: linear-gradient(to right,
+            var(--bg-secondary) 0, var(--bg-secondary) 259px,
+            var(--border) 259px, var(--border) 260px,
+            transparent 260px);
+    }
+}
+
 /* ========================================
    Mobile Menu Toggle
 ======================================== */
@@ -155,6 +166,7 @@ body {
     height: 100vh;
     position: sticky;
     top: 0;
+    align-self: start;
     overflow-y: auto;
     overflow-x: hidden;
 }
@@ -334,7 +346,20 @@ body {
 .main-content {
     padding: 32px 40px;
     overflow-y: auto;
+    min-width: 0;
     transition: background-color 0.3s ease;
+    /* Em monitores grandes o conteúdo não estica além de 1600px e fica centralizado */
+    width: 100%;
+    max-width: 1600px;
+    justify-self: center;
+}
+
+/* Campos de formulário nunca ultrapassam o container
+   (evita overflow horizontal em grids de duas colunas) */
+.main-content input,
+.main-content select,
+.main-content textarea {
+    max-width: 100%;
 }
 
 .main-content::-webkit-scrollbar {

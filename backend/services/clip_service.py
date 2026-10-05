@@ -1,7 +1,7 @@
 """Serviço de embeddings visuais usando CLIP."""
 
 import logging
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import numpy as np
 import torch
@@ -61,6 +61,32 @@ class ClipService:
 
         features = features / features.norm(p=2, dim=-1, keepdim=True)
         return features.squeeze().cpu().tolist()
+
+    def classify(self, image: Image.Image, labels: Dict[str, str]) -> str:
+        """Classificação zero-shot: escolhe a descrição textual mais parecida com a imagem.
+
+        Args:
+            image: Imagem PIL.
+            labels: Mapa {chave: descrição em inglês}, ex.: {"shorts": "a photo of shorts"}.
+
+        Returns:
+            A chave com maior probabilidade.
+        """
+        self._load_model()
+        keys = list(labels.keys())
+        inputs = self._processor(
+            text=[labels[k] for k in keys], images=image, return_tensors="pt", padding=True
+        ).to(self._device)
+
+        with torch.no_grad():
+            probs = self._model(**inputs).logits_per_image.softmax(dim=-1).squeeze(0)
+
+        best = int(probs.argmax())
+        logger.info(
+            "CLIP zero-shot: %s",
+            ", ".join("{}={:.2f}".format(k, float(p)) for k, p in zip(keys, probs)),
+        )
+        return keys[best]
 
     def cosine_similarity(self, embedding_a: List[float], embedding_b: List[float]) -> float:
         """Calcula similaridade cosseno entre dois embeddings."""

@@ -20,6 +20,7 @@
     <link rel="stylesheet" href="css/templatemo-crypto-style.css">
     <link rel="stylesheet" href="css/templatemo-crypto-pages.css">
 </head>
+<body>
     <button class="mobile-menu-toggle" id="mobileMenuToggle">
         <div class="hamburger"><span></span><span></span><span></span></div>
     </button>
@@ -413,21 +414,64 @@
             });
         };
 
+        /* ---- Redimensiona a imagem no navegador (lado maior até 600px, JPEG 0.8)
+           para não estourar a cota do localStorage ---- */
+        function redimensionarImagem(file, callback) {
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                var img = new Image();
+                img.onload = function() {
+                    var max = 600;
+                    var w = img.width, h = img.height;
+                    if (w > max || h > max) {
+                        var escala = max / Math.max(w, h);
+                        w = Math.round(w * escala);
+                        h = Math.round(h * escala);
+                    }
+                    var canvas = document.createElement('canvas');
+                    canvas.width = w;
+                    canvas.height = h;
+                    var ctx = canvas.getContext('2d');
+                    // Fundo branco para PNG/WEBP com transparência
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(0, 0, w, h);
+                    ctx.drawImage(img, 0, 0, w, h);
+                    var dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                    // Gera também um arquivo JPEG para o upload no Firebase Storage
+                    var bin = atob(dataUrl.split(',')[1]);
+                    var bytes = new Uint8Array(bin.length);
+                    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+                    var nomeArq = file.name.replace(/\.[^.]+$/, '') + '.jpg';
+                    var novoArquivo;
+                    try {
+                        novoArquivo = new File([bytes], nomeArq, { type: 'image/jpeg' });
+                    } catch (err) {
+                        novoArquivo = new Blob([bytes], { type: 'image/jpeg' });
+                        novoArquivo.name = nomeArq;
+                    }
+                    callback(dataUrl, novoArquivo);
+                };
+                img.onerror = function() { callback(null, null); };
+                img.src = e.target.result;
+            };
+            reader.onerror = function() { callback(null, null); };
+            reader.readAsDataURL(file);
+        }
+
         /* ---- Upload foto ADD ---- */
         var fotoAddFile = null;
         var fotoAddUrl = '';
         document.getElementById('adminImagem').addEventListener('change', function() {
             var file = this.files[0];
             if (!file) return;
-            fotoAddFile = file;
-            var reader = new FileReader();
-            reader.onload = function(e) {
-                fotoAddUrl = e.target.result;
-                document.getElementById('uploadPreviewImg').src = e.target.result;
+            redimensionarImagem(file, function(dataUrl, arquivo) {
+                if (!dataUrl) { showToast('Não foi possível ler a imagem'); return; }
+                fotoAddFile = arquivo;
+                fotoAddUrl = dataUrl;
+                document.getElementById('uploadPreviewImg').src = dataUrl;
                 document.getElementById('uploadArea').style.display = 'none';
                 document.getElementById('uploadPreview').style.display = 'flex';
-            };
-            reader.readAsDataURL(file);
+            });
         });
         window.removerFotoAdd = function() {
             fotoAddFile = null;
@@ -481,15 +525,14 @@
         document.getElementById('editImagem').addEventListener('change', function() {
             var file = this.files[0];
             if (!file) return;
-            fotoEditFile = file;
-            var reader = new FileReader();
-            reader.onload = function(e) {
-                fotoEditUrl = e.target.result;
-                document.getElementById('editUploadPreviewImg').src = e.target.result;
+            redimensionarImagem(file, function(dataUrl, arquivo) {
+                if (!dataUrl) { showToast('Não foi possível ler a imagem'); return; }
+                fotoEditFile = arquivo;
+                fotoEditUrl = dataUrl;
+                document.getElementById('editUploadPreviewImg').src = dataUrl;
                 document.getElementById('editUploadArea').style.display = 'none';
                 document.getElementById('editUploadPreview').style.display = 'flex';
-            };
-            reader.readAsDataURL(file);
+            });
         });
         window.removerFotoEdit = function() {
             fotoEditFile = null;
@@ -520,15 +563,26 @@
                 tamanhos: tamanhos.length > 0 ? tamanhos : ['P', 'M', 'G'],
                 descricao: document.getElementById('editDesc').value.trim()
             };
-            if (fotoEditUrl) dados.imagem = fotoEditUrl;
-            TechWearDB.editarProduto(id, dados, fotoEditFile || null)
+            // Sempre atribui a imagem (string vazia = foto removida)
+            dados.imagem = fotoEditUrl;
+            function restaurarBtnEdit() { btn.disabled = false; btn.textContent = 'Salvar Alterações'; }
+            var promessa;
+            try {
+                promessa = TechWearDB.editarProduto(id, dados, fotoEditFile || null);
+            } catch (err) {
+                // Ex.: cota do localStorage excedida (erro síncrono, antes de existir a Promise)
+                restaurarBtnEdit();
+                showToast('Erro ao salvar produto: armazenamento cheio ou imagem muito grande');
+                return;
+            }
+            promessa
                 .then(function() {
                     fecharEditar();
                     renderAll();
                     showToast('Produto atualizado!');
                 })
                 .catch(function() { showToast('Erro ao salvar produto'); })
-                .finally(function() { btn.disabled = false; btn.textContent = 'Salvar Alterações'; });
+                .then(restaurarBtnEdit, restaurarBtnEdit);
         });
 
         document.getElementById('btnAddProduto').addEventListener('click', function() {
@@ -540,18 +594,28 @@
             var btn = document.getElementById('btnAddProduto');
             btn.disabled = true;
             btn.textContent = 'Adicionando...';
-            TechWearDB.adicionarProduto({
-                nome: nome,
-                descricao: document.getElementById('adminDesc').value.trim(),
-                preco: preco,
-                categoria: document.getElementById('adminCategoria').value,
-                tamanhos: tamanhos.length > 0 ? tamanhos : ['P', 'M', 'G'],
-                cor: document.getElementById('adminCor').value.trim() || 'Preto',
-                hex_color: document.getElementById('adminHexColor').value.trim() || '#808080',
-                esporte: document.getElementById('adminEsporte').value,
-                imagem: fotoAddUrl,
-                estoque: estoque
-            }, fotoAddFile || null)
+            function restaurarBtnAdd() { btn.disabled = false; btn.textContent = 'Adicionar Produto'; }
+            var promessa;
+            try {
+                promessa = TechWearDB.adicionarProduto({
+                    nome: nome,
+                    descricao: document.getElementById('adminDesc').value.trim(),
+                    preco: preco,
+                    categoria: document.getElementById('adminCategoria').value,
+                    tamanhos: tamanhos.length > 0 ? tamanhos : ['P', 'M', 'G'],
+                    cor: document.getElementById('adminCor').value.trim() || 'Preto',
+                    hex_color: document.getElementById('adminHexColor').value.trim() || '#808080',
+                    esporte: document.getElementById('adminEsporte').value,
+                    imagem: fotoAddUrl,
+                    estoque: estoque
+                }, fotoAddFile || null);
+            } catch (err) {
+                // Ex.: cota do localStorage excedida (erro síncrono, antes de existir a Promise)
+                restaurarBtnAdd();
+                showToast('Erro ao adicionar produto: armazenamento cheio ou imagem muito grande');
+                return;
+            }
+            promessa
                 .then(function() {
                     document.getElementById('adminNome').value = '';
                     document.getElementById('adminPreco').value = '';
@@ -565,7 +629,7 @@
                     showToast('Produto adicionado!');
                 })
                 .catch(function() { showToast('Erro ao adicionar produto'); })
-                .finally(function() { btn.disabled = false; btn.textContent = 'Adicionar Produto'; });
+                .then(restaurarBtnAdd, restaurarBtnAdd);
         });
 
         function renderUsuarios() {

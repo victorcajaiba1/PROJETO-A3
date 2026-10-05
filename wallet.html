@@ -332,7 +332,9 @@ https://templatemo.com/tm-609-crypto-vault
                 var freteFinal  = (freteComImp * FC.MARGEM_SEG) + pedagio + FC.DESCARGA;
                 var fpedido     = freteFinal * (vreal / FC.V_BASE_CONSOL);
                 var mult        = vreal <= 0.01 ? 1.5 : vreal <= 0.05 ? 1.2 : 1.0;
-                var preco       = fpedido * mult;
+                /* Fator por veículo: expressa (moto) custa mais que padrão (van) */
+                var fatorVeiculo = veiculo === 'moto' ? 1.35 : 1.0;
+                var preco       = fpedido * mult * fatorVeiculo;
 
                 /* Prazo */
                 var params = veiculo === 'moto'
@@ -343,7 +345,7 @@ https://templatemo.com/tm-609-crypto-vault
                 var tPortaria = 2 * params.ts;   /* 2 paradas médias */
                 var ttotal    = tDesl + tPortaria + 0.5; /* +30min CD */
 
-                return {preco: Math.max(preco, 3.9), ttotal: ttotal};
+                return {preco: Math.round(Math.max(preco, 3.9 * fatorVeiculo) * 100) / 100, ttotal: ttotal};
             }
 
             return {moto: calcUm('moto'), van: calcUm('van')};
@@ -387,7 +389,7 @@ https://templatemo.com/tm-609-crypto-vault
                     if (!p) return;
                     html += '<div class="cart-item">' +
                         '<div class="cart-item-img">' + (p.imagem ? '<img src="' + p.imagem + '">' : '<div class="img-placeholder sm"><span class="material-symbols-outlined" style="font-size:32px">image</span></div>') + '</div>' +
-                        '<div class="cart-item-info"><h4>' + p.nome + '</h4><p>Tamanho: ' + item.tamanho + ' • Cor: ' + p.cor + '</p></div>' +
+                        '<div class="cart-item-info"><h4>' + p.nome + '</h4><small>Tamanho: ' + item.tamanho + ' • Cor: ' + p.cor + '</small></div>' +
                         '<div class="cart-item-qtd"><button class="qtd-btn" onclick="alterarQtd('+p.id+',\''+item.tamanho+'\','+(item.quantidade-1)+')">-</button><span>'+item.quantidade+'</span><button class="qtd-btn" onclick="alterarQtd('+p.id+',\''+item.tamanho+'\','+(item.quantidade+1)+')">+</button></div>' +
                         '<div class="cart-item-preco">' + TechWear.formatarPreco(p.preco * item.quantidade) + '</div>' +
                         '<button class="cart-item-remove" onclick="removerItem('+p.id+',\''+item.tamanho+'\')">&times;</button>' +
@@ -417,27 +419,36 @@ https://templatemo.com/tm-609-crypto-vault
         }
 
         function renderHistorico() {
-            var pedidos = TechWear.getPedidos();
+            /* Apenas pedidos do usuário logado (id 0 = superuser, por isso ===) */
+            var usuario = TechWear.getUsuarioLogado();
+            var pedidos = usuario ? TechWear.getPedidos().filter(function(ped) {
+                return ped.usuarioId === usuario.id;
+            }) : [];
             var card    = document.getElementById('historicoCard');
             var cont    = document.getElementById('historicoPedidos');
             if (pedidos.length === 0) { card.style.display = 'none'; return; }
             card.style.display = 'block';
             cont.innerHTML = pedidos.slice(0, 5).map(function(ped) {
                 var dataStr = new Date(ped.data).toLocaleDateString('pt-BR');
-                return '<div class="order-item"><div class="order-info"><span class="order-id">#'+ped.id.toString().slice(-6)+'</span><span class="order-date">'+dataStr+'</span></div><div class="order-right"><span class="order-total">'+TechWear.formatarPreco(ped.total)+'</span><span class="order-status">'+ped.status+'</span><a href="nota-fiscal.html" style="display:inline-flex;align-items:center;gap:4px;margin-top:6px;font-size:12px;color:var(--accent-copper);text-decoration:none;font-weight:600;" title="Ver nota fiscal"><span class="material-symbols-outlined" style="font-size:15px;">receipt_long</span>NF-e</a></div></div>';
+                return '<div class="order-item"><div class="order-info"><span class="order-id">#'+ped.id.toString().slice(-6)+'</span><span class="order-date">'+dataStr+'</span></div><div class="order-right"><span class="order-total">'+TechWear.formatarPreco(ped.total)+'</span><span class="order-status">'+ped.status+'</span><a href="nota-fiscal.html?id='+ped.id+'" style="display:inline-flex;align-items:center;gap:4px;margin-top:6px;font-size:12px;color:var(--accent-copper);text-decoration:none;font-weight:600;" title="Ver nota fiscal"><span class="material-symbols-outlined" style="font-size:15px;">receipt_long</span>NF-e</a></div></div>';
             }).join('');
         }
 
-        window.alterarQtd = function(id, tam, qtd) {
-            TechWear.alterarQuantidade(id, tam, qtd);
-            /* Limpa frete selecionado ao mudar carrinho */
+        /* Limpa frete selecionado ao mudar carrinho */
+        function resetarFrete() {
             document.getElementById('chkFreteValor').value = '0';
             document.getElementById('chkFreteModelo').value = '';
             document.getElementById('chkStep2').style.display = 'none';
             document.getElementById('confirmarPedido').disabled = true;
+        }
+
+        window.alterarQtd = function(id, tam, qtd) {
+            var res = TechWear.alterarQuantidade(id, tam, qtd);
+            if (res && res.erro) { showToast(res.erro, true); return; }
+            resetarFrete();
             renderCarrinho();
         };
-        window.removerItem = function(id, tam) { TechWear.removerDoCarrinho(id, tam); renderCarrinho(); showToast('Item removido'); };
+        window.removerItem = function(id, tam) { TechWear.removerDoCarrinho(id, tam); resetarFrete(); renderCarrinho(); showToast('Item removido'); };
 
         /* ── CEP ── */
         document.getElementById('chkCep').addEventListener('input', function() {

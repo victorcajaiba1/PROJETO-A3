@@ -1,0 +1,17 @@
+.git
+.gitignore
+.DS_Store
+**/.DS_Store
+.venv
+venv
+**/__pycache__
+**/*.pyc
+.env
+*.pt
+*.docx
+*.pdf
+gerar_documentacao.py
+backend/run.sh
+Dockerfile
+.dockerignore
+railway.json

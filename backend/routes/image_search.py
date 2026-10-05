@@ -2,9 +2,9 @@
 
 import logging
 from io import BytesIO
-from typing import List, Any, Dict
+from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, File, UploadFile, HTTPException
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from PIL import Image
 
 from backend.models.product import SearchResponse
@@ -18,10 +18,13 @@ router = APIRouter()
 
 
 @router.post("/search-by-image", response_model=SearchResponse)
-async def search_image(file: UploadFile = File(...)):
+async def search_image(file: UploadFile = File(...), category: Optional[str] = Form(None)):
     """Busca produtos similares a partir de uma foto de roupa.
 
     Fluxo: Upload → YOLO (detecção) → Crop → Cor HEX → CLIP embedding → Ranking
+
+    `category` (opcional): tipo de peça escolhido no filtro do frontend. Quando vem,
+    o recorte usa essa peça em vez da classificação automática do CLIP.
     """
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="O arquivo deve ser uma imagem.")
@@ -33,7 +36,7 @@ async def search_image(file: UploadFile = File(...)):
         logger.error("Erro ao processar imagem: %s", e)
         raise HTTPException(status_code=400, detail="Imagem inválida ou corrompida.")
 
-    result = search_by_image(image)
+    result = search_by_image(image, category=category or None)
     return SearchResponse(
         detected_hex=result["detected_hex"],
         detected_category=result["detected_category"],

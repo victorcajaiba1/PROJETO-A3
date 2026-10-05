@@ -289,41 +289,6 @@ https://templatemo.com/tm-609-crypto-vault
     }
 
     /* ========================================
-       Form Submissions
-    ======================================== */
-    function initFormSubmissions() {
-        const loginForm = document.getElementById('loginForm');
-        const registerForm = document.getElementById('registerForm');
-
-        if (loginForm) {
-            loginForm.addEventListener('submit', function(e) {
-                e.preventDefault();
-                window.location.href = 'index.html';
-            });
-        }
-
-        if (registerForm) {
-            registerForm.addEventListener('submit', function(e) {
-                e.preventDefault();
-                
-                const successMessage = document.getElementById('successMessage');
-                const formHeader = document.querySelector('.form-header');
-                const authTabs = document.querySelector('.auth-tabs');
-                
-                if (successMessage) {
-                    registerForm.style.display = 'none';
-                    if (authTabs) authTabs.style.display = 'none';
-                    successMessage.classList.add('active');
-                    if (formHeader) {
-                        formHeader.querySelector('h1').textContent = 'Sucesso!';
-                        formHeader.querySelector('p').textContent = '';
-                    }
-                }
-            });
-        }
-    }
-
-    /* ========================================
        Toast Notification
     ======================================== */
     function showToast(message) {
@@ -392,24 +357,6 @@ https://templatemo.com/tm-609-crypto-vault
             });
         });
 
-        // Settings buttons (Save, Cancel, etc)
-        document.querySelectorAll('.btn-group .btn').forEach(function(btn) {
-            if (!btn.getAttribute('onclick')) {
-                btn.addEventListener('click', function() {
-                    var text = btn.textContent.trim();
-                    if (text.includes('Save') || text.includes('Salvar')) {
-                        showToast('Alterações salvas com sucesso!');
-                    } else if (text.includes('Cancel') || text.includes('Cancelar')) {
-                        showToast('Alterações descartadas');
-                    } else if (text.includes('Delete') || text.includes('Excluir')) {
-                        showToast('Função indisponível no momento');
-                    } else {
-                        showToast('Função "' + text + '" em breve!');
-                    }
-                });
-            }
-        });
-
         // Security buttons (Change Password, Manage, Enable, View All, Disconnect, Connect)
         document.querySelectorAll('.security-btn').forEach(function(btn) {
             btn.addEventListener('click', function() {
@@ -433,6 +380,54 @@ https://templatemo.com/tm-609-crypto-vault
     }
 
     /* ========================================
+       Sidebar - Entrar / Sair
+    ======================================== */
+    function criarItemSidebar(href, icone, texto) {
+        var link = document.createElement('a');
+        link.href = href;
+        link.className = 'logout-btn';
+        link.style.textDecoration = 'none';
+        var span = document.createElement('span');
+        span.className = 'material-symbols-outlined';
+        span.textContent = icone;
+        link.appendChild(span);
+        link.appendChild(document.createTextNode(texto));
+        return link;
+    }
+
+    function initSidebarSessao() {
+        var footer = document.querySelector('.sidebar .sidebar-footer');
+        if (!footer) return;
+
+        var sessao = null;
+        try {
+            sessao = JSON.parse(localStorage.getItem('tw_sessao') || 'null');
+        } catch (e) {
+            sessao = null;
+        }
+        var perfil = footer.querySelector('a[href="settings.html"]');
+
+        if (!sessao) {
+            // Visitante: esconde "Meu Perfil" e mostra "Entrar"
+            if (perfil) perfil.style.display = 'none';
+            footer.appendChild(criarItemSidebar('login.html', 'login', 'Entrar'));
+        } else {
+            // Logado: mantém "Meu Perfil" e adiciona "Sair"
+            var sair = criarItemSidebar('login.html', 'logout', 'Sair');
+            sair.addEventListener('click', function(e) {
+                e.preventDefault();
+                if (window.TechWear && typeof window.TechWear.logout === 'function') {
+                    window.TechWear.logout();
+                } else {
+                    localStorage.removeItem('tw_sessao');
+                    window.location.href = 'login.html';
+                }
+            });
+            footer.appendChild(sair);
+        }
+    }
+
+    /* ========================================
        Initialize All
     ======================================== */
     function init() {
@@ -447,9 +442,9 @@ https://templatemo.com/tm-609-crypto-vault
         initPasswordToggle();
         initPasswordStrength();
         initAuthTabs();
-        initFormSubmissions();
         initPlaceholderButtons();
         initRoleBasedSidebar();
+        initSidebarSessao();
     }
 
     // Run on DOM ready

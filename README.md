@@ -32,7 +32,6 @@ O **Tech Wear** é uma plataforma completa de e-commerce especializada em vestu�
 - 💳 Fluxo completo de compra: carrinho → frete → pagamento → nota fiscal
 - 📦 Cálculo de frete baseado na tabela ANTT com decomposição de impostos (ICMS, PIS, COFINS)
 - 📊 Dashboard gerencial com previsão de vendas por regressão linear e controle de estoque
-- 🌙 Tema claro/escuro com persistência
 - 🔐 Autenticação de usuários e painel administrativo
 
 ---
@@ -55,13 +54,14 @@ Projeto USJT/
 ├── wearia.html           # Busca visual inteligente (WearIA)
 │
 ├── css/                  # Estilos CSS globais e por página
+├── img/produtos/         # Fotos do catálogo padrão (créditos em CREDITOS.md)
 ├── js/
 │   ├── produtos.js       # API global window.TechWear (localStorage)
-│   ├── wearia.js         # Integração com o backend de IA
+│   ├── wearia.js         # Integração com o backend de IA (usa /api no mesmo servidor)
 │   └── firebase-config.js
 │
 └── backend/              # API Python (FastAPI)
-    ├── main.py           # Entrada da aplicação
+    ├── main.py           # Entrada: API + entrega do frontend
     ├── routes/
     │   └── image_search.py   # Endpoints REST
     ├── services/
@@ -78,56 +78,49 @@ Projeto USJT/
 
 ## 🚀 Como Rodar
 
+Um único servidor FastAPI entrega o site (HTML/CSS/JS) **e** a API de busca visual na mesma porta.
+
 ### Pré-requisitos
 
-- [Python 3.10+](https://www.python.org/)
+- [Python 3.10–3.12](https://www.python.org/) (PyTorch 2.4 ainda não suporta 3.13)
 - Navegador moderno (Chrome, Firefox ou Edge)
 
----
-
-### 1. Frontend (sem instalação)
-
-Abra qualquer `.html` diretamente no navegador **ou** sirva com um servidor local:
+### Local
 
 ```bash
-# Python (qualquer versão)
-python -m http.server 3000
+# Na raiz do projeto — cria o .venv na primeira vez e sobe o servidor
+sh backend/run.sh
 ```
 
-Acesse: `http://localhost:3000/index.html`
-
----
-
-### 2. Backend — WearIA (busca visual por IA)
-
-> **Necessário apenas para usar a busca visual.**
-
-#### Criar ambiente virtual e instalar dependências
+Ou manualmente:
 
 ```bash
-cd backend
-
-# Windows
-python -m venv ../.venv
-..\.venv\Scripts\activate
-
-# Linux / macOS
-python -m venv ../.venv
-source ../.venv/bin/activate
-
-# Instalar pacotes
-pip install -r requirements.txt
-```
-
-#### Iniciar o servidor FastAPI
-
-```bash
-# Na raiz do projeto (com venv ativado)
+python -m venv .venv
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
+pip install -r backend/requirements.txt
 uvicorn backend.main:app --reload --port 8000
 ```
 
-API disponível em: `http://localhost:8000`  
-Documentação interativa: `http://localhost:8000/docs`
+- Site: `http://localhost:8000`
+- Documentação interativa da API: `http://localhost:8000/docs`
+
+**Acesso administrativo:** `admin@techwear.com` / `admin123` (superusuário fixo). O primeiro usuário cadastrado também vira admin.
+
+**Testando a WearIA:** o catálogo padrão tem 33 produtos com foto (em `img/produtos/`). Envie qualquer foto de roupa — inclusive uma das próprias fotos do catálogo, que deve voltar em 1º lugar. Quando a foto mostra mais de uma peça (camiseta + short, por exemplo), escolha o **Tipo de peça** no filtro para guiar o recorte.
+
+> Na primeira busca visual o YOLOv8n e o CLIP são baixados (~600 MB). Sem o backend, a WearIA usa uma busca local simplificada.
+
+### Deploy na Railway
+
+O repositório já tem `Dockerfile` e `railway.json`:
+
+1. Na Railway: **New Project → Deploy from GitHub repo** e selecione este repositório.
+2. A Railway detecta o `Dockerfile`, faz o build (PyTorch CPU + modelos já baixados) e usa a variável `PORT` automaticamente.
+3. Em **Settings → Networking**, clique em **Generate Domain**.
+
+Health check: `GET /api/health`. Recomenda-se pelo menos **2 GB de RAM** no serviço (YOLO + CLIP carregados em memória).
+
+Ou pela CLI: `railway init` e depois `railway up`.
 
 ---
 
@@ -135,7 +128,8 @@ Documentação interativa: `http://localhost:8000/docs`
 
 | Método | Rota | Descrição |
 |--------|------|-----------|
-| `GET` | `/` | Health check |
+| `GET` | `/api/health` | Health check |
+| `GET` | `/` | Frontend (`index.html`) |
 | `POST` | `/api/search-by-image` | Busca produtos por imagem (multipart) |
 | `POST` | `/api/index-products` | Indexa catálogo do frontend com embeddings |
 
@@ -152,6 +146,7 @@ Documentação interativa: `http://localhost:8000/docs`
 | **Dashboard** | Coeficiente R² | `R² = 1 − SS_res/SS_tot` |
 | **Estoque** | Velocidade de venda | `t_ruptura = estoque ÷ (vel_30 ÷ 30)` |
 | **WearIA** | Ranking híbrido | `score = 0,7 × sim_CLIP + 0,3 × sim_cor` |
+| **WearIA** | Similaridade de cor | `sim_cor = 0,6 × sim_matiz + 0,4 × (1 − ΔE₂₀₀₀ / 50)` |
 
 ---
 
@@ -169,10 +164,10 @@ Documentação interativa: `http://localhost:8000/docs`
 ### Backend
 | Tecnologia | Versão | Uso |
 |---|---|---|
-| Python | 3.13 | Linguagem principal |
+| Python | 3.11 | Linguagem principal |
 | FastAPI | 0.115 | Framework da API REST |
 | Uvicorn | 0.30 | Servidor ASGI |
-| YOLOv8 (Ultralytics) | 8.2 | Detecção de roupas em imagens |
+| YOLOv8n-seg (Ultralytics) | 8.2 | Detecção e silhueta da pessoa (remove o fundo antes de medir a cor) |
 | CLIP (Hugging Face) | clip-vit-base-patch32 | Embeddings visuais e semânticos |
 | scikit-learn | 1.5 | KMeans para extração de cor dominante |
 | PyTorch | 2.4 | Framework de deep learning |
@@ -188,8 +183,9 @@ Documentação interativa: `http://localhost:8000/docs`
 | `tw_carrinho` | Itens no carrinho |
 | `tw_usuarios` | Usuários cadastrados |
 | `tw_sessao` | Usuário logado |
-| `tw_pedidos` | Histórico de pedidos |
-| `theme` | Tema da interface (`dark` / `light`) |
+| `tw_pedidos` | Histórico de pedidos (`subtotal` = produtos, `total` = valor pago com frete, desconto e juros) |
+| `tw_perfil_<id>` | Dados de perfil de cada usuário |
+| `tw_dados_versao` | Versão do catálogo padrão (adiciona produtos novos sem apagar os cadastrados) |
 
 ---
 

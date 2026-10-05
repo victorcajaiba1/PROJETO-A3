@@ -1,24 +1,19 @@
+#!/usr/bin/env sh
 # ========================================
-# Como rodar o backend WearIA
+# Tech Wear — sobe frontend + API WearIA num único servidor
+# Uso (na raiz do projeto): sh backend/run.sh
 # ========================================
+set -e
+cd "$(dirname "$0")/.."
 
-# 1. Crie um ambiente virtual (recomendado)
-python -m venv venv
-venv\Scripts\activate
+# 1. Cria o ambiente virtual na primeira execução
+if [ ! -d .venv ]; then
+    python3 -m venv .venv
+    .venv/bin/pip install --upgrade pip
+    .venv/bin/pip install -r backend/requirements.txt
+fi
 
-# 2. Instale as dependências
-pip install -r backend/requirements.txt
-
-# 3. Rode o servidor
-uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
-
-# O backend ficará disponível em http://localhost:8000
-# Docs interativas: http://localhost:8000/docs
-
-# ========================================
-# Frontend
-# ========================================
-# Abra o index.html no navegador diretamente
-# Ou use um servidor local:
-#   python -m http.server 8080
-#   Acesse: http://localhost:8080
+# 2. Sobe o servidor
+# Site:          http://localhost:8000
+# Docs da API:   http://localhost:8000/docs
+.venv/bin/uvicorn backend.main:app --reload --host 0.0.0.0 --port "${PORT:-8000}"

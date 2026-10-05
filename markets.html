@@ -241,11 +241,20 @@ https://templatemo.com/tm-609-crypto-vault
         document.getElementById('modalClose').addEventListener('click', function() { modal.classList.remove('active'); });
         modal.addEventListener('click', function(e) { if (e.target === modal) modal.classList.remove('active'); });
         document.getElementById('qtdMenos').addEventListener('click', function() { if (quantidade > 1) { quantidade--; document.getElementById('qtdValor').textContent = quantidade; } });
-        document.getElementById('qtdMais').addEventListener('click', function() { quantidade++; document.getElementById('qtdValor').textContent = quantidade; });
+        document.getElementById('qtdMais').addEventListener('click', function() {
+            var disponivel = produtoAtual ? TechWear.getEstoqueDisponivel(produtoAtual.id) : 0;
+            if (quantidade >= disponivel) {
+                showToast(disponivel > 0 ? 'Apenas ' + disponivel + ' unidade(s) disponível(is)' : 'Sem estoque disponível');
+                return;
+            }
+            quantidade++;
+            document.getElementById('qtdValor').textContent = quantidade;
+        });
         document.getElementById('addCartBtn').addEventListener('click', function() {
             if (!tamanhoSelecionado) { showToast('Selecione um tamanho'); return; }
             if (!produtoAtual || produtoAtual.estoque < 1) { showToast('Produto esgotado'); return; }
-            TechWear.adicionarAoCarrinho(produtoAtual.id, tamanhoSelecionado, quantidade);
+            var res = TechWear.adicionarAoCarrinho(produtoAtual.id, tamanhoSelecionado, quantidade);
+            if (res && res.erro) { showToast(res.erro); return; }
             showToast(produtoAtual.nome + ' adicionado ao carrinho!');
             modal.classList.remove('active');
         });

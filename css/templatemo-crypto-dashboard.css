@@ -31,7 +31,8 @@ https://templatemo.com/tm-609-crypto-vault
     background-color: #021224;
     border: 1px solid var(--border);
     border-radius: 16px;
-    min-height: 260px;
+    /* Cresce com a largura da tela para a foto não ser cortada em monitores grandes */
+    min-height: clamp(260px, 24vw, 440px);
     display: flex;
     align-items: flex-end;
     justify-content: center;
@@ -43,17 +44,21 @@ https://templatemo.com/tm-609-crypto-vault
 
 .home-hero-img {
     position: absolute;
-    top: 55%;
+    bottom: 0;
     left: 50%;
-    transform: translate(-50%, -50%) scale(1);
-    width: 60%;
+    transform: translateX(-50%) scale(1);
+    transform-origin: bottom center;
+    height: 100%;
+    width: auto;
+    max-width: 92%;
     object-fit: contain;
+    object-position: bottom;
     transition: transform 0.3s ease;
     pointer-events: none;
 }
 
 .home-hero:hover .home-hero-img {
-    transform: translate(-50%, -50%) scale(1.04);
+    transform: translateX(-50%) scale(1.04);
 }
 
 .home-hero-content {
@@ -185,6 +190,14 @@ https://templatemo.com/tm-609-crypto-vault
     display: flex;
     align-items: center;
     gap: 20px;
+    min-width: 0;
+    max-width: 100%;
+}
+
+/* Botão e logo não encolhem; a busca é que cede espaço */
+.header-right > img,
+.header-right > .notification-btn {
+    flex-shrink: 0;
 }
 
 .header-search {
@@ -196,6 +209,7 @@ https://templatemo.com/tm-609-crypto-vault
     border-radius: 10px;
     border: 1px solid var(--border);
     transition: border-color 0.2s ease;
+    min-width: 0;
 }
 
 .header-search:focus-within {
@@ -212,6 +226,8 @@ https://templatemo.com/tm-609-crypto-vault
     color: var(--text-primary);
     font-size: 15px;
     width: 180px;
+    min-width: 0;
+    flex: 1 1 auto;
     font-family: inherit;
 }
 

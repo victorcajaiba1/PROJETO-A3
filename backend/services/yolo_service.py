@@ -4,7 +4,7 @@ import logging
 from typing import Optional, Tuple
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw
 from ultralytics import YOLO
 
 logger = logging.getLogger(__name__)
@@ -35,8 +35,10 @@ class YoloService:
 
     def _load_model(self) -> YOLO:
         if self._model is None:
-            logger.info("Carregando modelo YOLOv8n...")
-            self._model = YOLO("yolov8n.pt")
+            # Versão de segmentação: além da caixa, devolve o contorno da pessoa,
+            # o que permite tirar o fundo antes de medir a cor da roupa.
+            logger.info("Carregando modelo YOLOv8n-seg...")
+            self._model = YOLO("yolov8n-seg.pt")
             logger.info("Modelo YOLO carregado com sucesso.")
         return self._model
 
@@ -54,9 +56,10 @@ class YoloService:
         best_box = None
         best_conf = 0.0
         best_label = ""
+        best_polygon = None
 
         for result in results:
-            for box in result.boxes:
+            for i, box in enumerate(result.boxes):
                 conf = float(box.conf[0])
                 cls_id = int(box.cls[0])
                 label = result.names.get(cls_id, "")
@@ -67,17 +70,23 @@ class YoloService:
                     best_conf = conf
                     best_box = box.xyxy[0].cpu().numpy()
                     best_label = label
+                    best_polygon = (
+                        result.masks.xy[i] if result.masks is not None and i < len(result.masks.xy) else None
+                    )
 
         if best_box is not None and best_conf > 0.3:
             x1, y1, x2, y2 = map(int, best_box)
-            # Se detectou pessoa, pegar região central (torso = roupa)
+            # Pessoa: devolve o corpo inteiro. O COCO não tem classes de roupa,
+            # então a peça é identificada depois pelo CLIP (zero-shot).
             if best_label == "person":
-                h = y2 - y1
-                # Crop do torso: 15% a 65% da altura da pessoa
-                torso_y1 = y1 + int(h * 0.15)
-                torso_y2 = y1 + int(h * 0.65)
-                crop = image.crop((x1, torso_y1, x2, torso_y2))
-                category = "camiseta"
+                crop = image.crop((x1, y1, x2, y2))
+                if best_polygon is not None and len(best_polygon) >= 3:
+                    # Canal alfa = silhueta da pessoa (fundo fica transparente)
+                    mask = Image.new("L", image.size, 0)
+                    ImageDraw.Draw(mask).polygon([tuple(pt) for pt in best_polygon], fill=255)
+                    crop = crop.convert("RGBA")
+                    crop.putalpha(mask.crop((x1, y1, x2, y2)))
+                category = "pessoa"
             else:
                 crop = image.crop((x1, y1, x2, y2))
                 category = self._map_label_to_category(best_label)

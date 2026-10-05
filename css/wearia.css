@@ -170,7 +170,10 @@
     justify-content: center;
 }
 
-.upload-preview img {
+/* Sobrescreve a miniatura 100×100 do admin (templatemo-crypto-pages.css) */
+.upload-zone .upload-preview img {
+    width: auto;
+    height: auto;
     max-width: 100%;
     max-height: 260px;
     border-radius: 10px;
@@ -584,10 +587,16 @@
     backdrop-filter: blur(6px);
     z-index: 2000;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
     padding: 20px;
+    overflow-y: auto;
     animation: fadeInOverlay 0.25s ease;
+}
+
+/* Centraliza o modal quando cabe na tela; quando é mais alto, rola sem cortar o topo */
+.wearia-notfound-overlay > * {
+    margin: auto 0;
 }
 
 @keyframes fadeInOverlay {
@@ -866,6 +875,16 @@
 }
 
 @media (max-width: 600px) {
+    .how-it-works-steps {
+        flex-direction: column;
+        gap: 22px;
+    }
+
+    .hiw-step-arrow {
+        transform: rotate(90deg);
+        align-self: center;
+    }
+
     .upload-zone {
         padding: 24px 16px;
         min-height: 160px;
