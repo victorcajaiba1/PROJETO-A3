@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 from backend.routes.image_search import router as image_router
+from backend.routes.pedidos import router as pedidos_router
 
 # Registra o plugin AVIF/HEIC no Pillow. Sem isso, Image.open() rejeita fotos
 # .avif/.heic (comuns em downloads do Unsplash e fotos de iPhone) com
@@ -51,6 +52,7 @@ app.add_middleware(
 
 # Rotas da API
 app.include_router(image_router, prefix="/api", tags=["Busca Visual"])
+app.include_router(pedidos_router, prefix="/api", tags=["Pedidos"])
 
 
 @app.get("/api/health")

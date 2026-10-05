@@ -1208,6 +1208,7 @@
         var entrega    = null;
         var desconto   = 0;
         var couponApplied = false;
+        var cupomCodigo = null;
         var currentMethod = 'credito';
         var boletoCodeStr = '';
         var pixKey = '498.604.598-94';
@@ -1544,6 +1545,7 @@
             if (COUPONS[code] !== undefined) {
                 desconto = COUPONS[code];
                 couponApplied = true;
+                cupomCodigo = code;
                 fb.className = 'coupon-feedback ok';
                 fb.textContent = '✓ Cupom ' + code + ' aplicado! ' + Math.round(desconto*100) + '% de desconto.';
                 document.getElementById('couponInput').disabled = true;
@@ -1738,7 +1740,74 @@
         };
 
         /* ── Finalize order ── */
+        /* Grava o pedido no PostgreSQL pela API. O servidor recalcula preços,
+           desconto e juros e reserva o estoque. Resolve com o pedido gravado,
+           ou com null quando o servidor está sem banco/fora do ar (o pedido
+           segue só no navegador). Rejeita quando o servidor recusa o pedido. */
+        function enviarPedidoServidor() {
+            var usuario = TechWear.getUsuarioLogado();
+            var parcelasSel = document.getElementById('cardInstallments');
+            var payload = {
+                usuario: usuario ? { nome: usuario.nome, email: usuario.email, perfil: usuario.perfil || 'cliente' } : null,
+                itens: TechWear.getCarrinho().map(function(item) {
+                    return { produto_id: item.produtoId, tamanho: item.tamanho, quantidade: item.quantidade };
+                }),
+                entrega: {
+                    destinatario: entrega.nome,
+                    cep:          entrega.cep,
+                    logradouro:   entrega.endereco || '',
+                    numero:       entrega.numero || 'S/N',
+                    bairro:       entrega.bairro || '',
+                    cidade:       entrega.cidade,
+                    estado:       entrega.estado,
+                    tipo:         entrega.freteModelo === 'moto' ? 'expressa' : 'padrao',
+                    valor_frete:  parseFloat(entrega.freteVal) || 0
+                },
+                pagamento: {
+                    metodo:   currentMethod,
+                    parcelas: currentMethod === 'credito' && parcelasSel && parcelasSel.value ? parseInt(parcelasSel.value, 10) : 1
+                },
+                cupom: cupomCodigo
+            };
+            return fetch('/api/pedidos', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            }).then(function(r) {
+                return r.json().catch(function() { return {}; }).then(function(data) {
+                    if (r.ok) return data;
+                    if (r.status >= 500) {
+                        console.warn('[pedidos] Servidor sem banco, pedido salvo só no navegador:', data.detail);
+                        return null;
+                    }
+                    var msg = typeof data.detail === 'string' ? data.detail : 'Pedido recusado pelo servidor.';
+                    throw new Error(msg);
+                });
+            }, function(err) {
+                console.warn('[pedidos] API indisponível, pedido salvo só no navegador:', err);
+                return null;
+            });
+        }
+
+        function restaurarBotaoPagamento(msg) {
+            showToast(msg || 'Erro ao processar pagamento.', true);
+            var btn = document.getElementById('payBtn');
+            btn.disabled = false;
+            /* Restaura o conteúdo trocado por "Processando..." */
+            btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:20px;">lock</span>' +
+                            '<span id="payBtnLabel"></span>';
+            updatePayBtnLabel();
+        }
+
         function finalizeOrder() {
+            enviarPedidoServidor().then(function(servidor) {
+                registrarPedidoLocal(servidor);
+            }, function(err) {
+                restaurarBotaoPagamento(err.message);
+            });
+        }
+
+        function registrarPedidoLocal(servidor) {
             var subtotal  = TechWear.getTotalCarrinho();
             var freteVal  = entrega ? (parseFloat(entrega.freteVal) || 0) : 0;
             var descontoVal = desconto > 0 ? Math.round(subtotal * desconto * 100) / 100 : 0;
@@ -1761,6 +1830,7 @@
             }, { total: totalFinal });
 
             if (result.sucesso) {
+                if (servidor) result.pedido.servidorId = servidor.pedido_id;
                 /* Clear pending checkout */
                 localStorage.removeItem('tw_checkout_pendente');
                 /* PIX timer */
@@ -1770,13 +1840,7 @@
                 /* Show success */
                 showSuccess(result.pedido);
             } else {
-                showToast(result.erro || 'Erro ao processar pagamento.', true);
-                var btn = document.getElementById('payBtn');
-                btn.disabled = false;
-                /* Restaura o conteúdo trocado por "Processando..." */
-                btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:20px;">lock</span>' +
-                                '<span id="payBtnLabel"></span>';
-                updatePayBtnLabel();
+                restaurarBotaoPagamento(result.erro);
             }
         }
 
