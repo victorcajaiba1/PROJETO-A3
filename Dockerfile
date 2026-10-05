@@ -5,7 +5,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     HF_HOME=/opt/models/huggingface \
-    YOLO_CONFIG_DIR=/opt/models/ultralytics
+    YOLO_CONFIG_DIR=/opt/models/ultralytics \
+    YOLO_AUTOINSTALL=False
 
 # Bibliotecas de sistema exigidas pelo OpenCV (dependência do Ultralytics)
 RUN apt-get update \
@@ -18,7 +19,9 @@ WORKDIR /app
 RUN pip install torch==2.4.1 torchvision==0.19.1 --index-url https://download.pytorch.org/whl/cpu
 
 COPY backend/requirements.txt backend/requirements.txt
-RUN pip install -r backend/requirements.txt
+RUN pip install -r backend/requirements.txt \
+    && python -c "import numpy, scipy.sparse, sklearn.cluster, cv2, torch, transformers, ultralytics; \
+assert numpy.__version__ == '1.26.4', numpy.__version__"
 
 # Baixa os modelos no build para a primeira busca não esperar o download
 RUN mkdir -p /opt/models/yolo \
@@ -28,7 +31,8 @@ RUN mkdir -p /opt/models/yolo \
 m='openai/clip-vit-base-patch32'; CLIPProcessor.from_pretrained(m); CLIPModel.from_pretrained(m)"
 
 COPY . .
-RUN ln -sf /opt/models/yolo/yolov8n-seg.pt /app/yolov8n-seg.pt
+RUN ln -sf /opt/models/yolo/yolov8n-seg.pt /app/yolov8n-seg.pt \
+    && python -c "import backend.main"
 
 EXPOSE 8000
 CMD ["sh", "-c", "uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
